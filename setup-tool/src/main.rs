@@ -16,6 +16,10 @@ struct Args {
     #[arg(long, default_value = "linux-x64")]
     #[arg(help = "Target architecture: linux-x64, linux-arm64")]
     arch: String,
+    
+    #[arg(long)]
+    #[arg(help = "Clear cached binaries before installation")]
+    clear_cache: bool,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -61,8 +65,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Download and install openvscode-server with streaming output
     println!("Installing openvscode-server for {}...", args.arch);
+    let clear_cache_cmd = if args.clear_cache { "rm -rf openvscode-server.tar.gz openvscode-server" } else { "" };
     let install_script = format!(r#"
         cd ~/.socratic-shell/theoldswitcheroo/
+        {}
         if [ ! -f openvscode-server.tar.gz ]; then
             curl -L https://github.com/gitpod-io/openvscode-server/releases/download/openvscode-server-v1.103.1/openvscode-server-v1.103.1-{}.tar.gz -o openvscode-server.tar.gz
         fi
@@ -71,7 +77,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             mv openvscode-server-v1.103.1-{} openvscode-server
             chmod +x openvscode-server/bin/openvscode-server
         fi
-    "#, args.arch, args.arch);
+    "#, clear_cache_cmd, args.arch, args.arch);
     
     let mut install_child = Command::new("ssh")
         .arg(&args.host)
