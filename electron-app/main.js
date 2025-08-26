@@ -12,6 +12,22 @@ let currentHostname = null;
 let mainWindow = null;
 let sidebarView = null;
 
+// Function to update view bounds based on window size
+function updateViewBounds() {
+  if (!mainWindow) return;
+  
+  const bounds = mainWindow.getBounds();
+  const sidebarWidth = 75;
+  
+  sidebarView.setBounds({ x: 0, y: 0, width: sidebarWidth, height: bounds.height });
+  
+  // Update bounds for active session's view
+  const activeSession = sessions.find(s => s.id === activeSessionId);
+  if (activeSession && activeSession.vscodeView) {
+    activeSession.vscodeView.setBounds({ x: sidebarWidth, y: 0, width: bounds.width - sidebarWidth, height: bounds.height });
+  }
+}
+
 // Session object structure
 function createSession(id, hostname, port, serverProcess) {
   return {
@@ -428,20 +444,6 @@ async function createWindow() {
   // Add views to the window
   mainWindow.contentView.addChildView(sidebarView);
   mainWindow.contentView.addChildView(firstSession.vscodeView);
-
-  // Function to update view bounds based on window size
-  function updateViewBounds() {
-    const bounds = mainWindow.getBounds();
-    const sidebarWidth = 75;
-    
-    sidebarView.setBounds({ x: 0, y: 0, width: sidebarWidth, height: bounds.height });
-    
-    // Update bounds for active session's view
-    const activeSession = sessions.find(s => s.id === activeSessionId);
-    if (activeSession && activeSession.vscodeView) {
-      activeSession.vscodeView.setBounds({ x: sidebarWidth, y: 0, width: bounds.width - sidebarWidth, height: bounds.height });
-    }
-  }
 
   // Set initial bounds
   updateViewBounds();
