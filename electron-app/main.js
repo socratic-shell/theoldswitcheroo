@@ -127,9 +127,9 @@ async function startVSCodeServerWithPortForwarding(hostname, port) {
         exit 1
       fi
       
-      # Monitor parent process and cleanup on exit
+      # Keep script alive - signal traps handle cleanup
       while true; do 
-        sleep 1
+        sleep 60
       done
     `;
     
