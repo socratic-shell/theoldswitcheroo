@@ -24,5 +24,9 @@ Please read them as needed to get up to speed on particular topics.
 - [Complete Guide to Integrating openvscode-server with Electron](./references/complete-guide-to-integrating-openvscode-server-with-electron.md)
 
 
+<!-- This document provides comprehensive guidance for SSH ControlMaster connection multiplexing in Node.js applications. Content includes: performance benchmarks (99%+ speed improvement), complete implementation classes, socket management, security considerations, troubleshooting guides, and best practices. Use this for: optimizing SSH connection performance, implementing connection reuse, managing multiple SSH sessions efficiently, debugging connection issues. -->
+- [SSH ControlMaster](./references/ControlMaster-Report.md)
+
+
 <!-- This document provides comprehensive guidance for SSH session management in Node.js applications using system SSH binary wrapping. Content includes: child_process patterns, ssh-config parsing, node-pty terminal emulation, ControlMaster multiplexing, ProxyCommand handling, background process management, security validation, and performance optimization. Use this for: implementing robust SSH connections, handling complex SSH configurations, managing remote processes, debugging SSH connectivity issues. -->
 - [SSH Session Management in Node.js with System Binary Wrapping](./references/SSH-Session-Management-in-Node-with-System-Binary-Wrapping.md)
