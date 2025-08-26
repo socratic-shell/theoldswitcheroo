@@ -34,3 +34,7 @@ Please read them as needed to get up to speed on particular topics.
 
 <!-- This document provides comprehensive guidance for SSH session management in Node.js applications using system SSH binary wrapping. Content includes: child_process patterns, ssh-config parsing, node-pty terminal emulation, ControlMaster multiplexing, ProxyCommand handling, background process management, security validation, and performance optimization. Use this for: implementing robust SSH connections, handling complex SSH configurations, managing remote processes, debugging SSH connectivity issues. -->
 - [SSH Session Management in Node.js with System Binary Wrapping](./references/SSH-Session-Management-in-Node-with-System-Binary-Wrapping.md)
+
+
+<!-- This document provides comprehensive guidance for VSCode server multi-session architecture using data directory flags and symlink strategies. Content includes: --user-data-dir vs --server-data-dir separation, extensions directory management, directory structuring for shared settings with isolated workspace state, setup scripts for session creation, and implementation patterns for replicating local "File → New Window" behavior remotely. Use this for: solving session persistence issues, implementing multi-session data strategies, sharing user preferences across sessions while maintaining workspace isolation. -->
+- [VSCode Server Multi-Session Architecture Guide](./references/vscode-multi-session-architecture-guide.md)

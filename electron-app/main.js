@@ -11,6 +11,81 @@ let activeSessionId = null;
 let currentHostname = null;
 let mainWindow = null;
 let sidebarView = null;
+let splashWindow = null;
+
+// Create splash screen
+function createSplashScreen() {
+  splashWindow = new BaseWindow({
+    width: 500,
+    height: 400,
+    show: false,
+    frame: false,
+    backgroundColor: '#1e1e1e',
+    center: true,
+    resizable: false
+  });
+
+  const splashView = new WebContentsView({
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false
+    }
+  });
+
+  splashWindow.contentView.addChildView(splashView);
+  splashView.setBounds({ x: 0, y: 0, width: 500, height: 400 });
+  
+  splashView.webContents.loadFile('splash.html');
+  
+  splashView.webContents.once('did-finish-load', () => {
+    splashWindow.show();
+  });
+  
+  return splashView.webContents;
+}
+
+// Update splash screen status
+function updateSplashStatus(message) {
+  if (splashWindow && !splashWindow.isDestroyed() && splashWindow.webContents) {
+    splashWindow.webContents.send('splash-status', message);
+  }
+}
+
+// Update splash screen hostname
+function updateSplashHostname(hostname) {
+  if (splashWindow && !splashWindow.isDestroyed() && splashWindow.webContents) {
+    splashWindow.webContents.send('splash-hostname', hostname);
+  }
+}
+
+// Update splash screen sessions
+function updateSplashSessions(sessionList) {
+  if (splashWindow && !splashWindow.isDestroyed() && splashWindow.webContents) {
+    splashWindow.webContents.send('splash-sessions', sessionList);
+  }
+}
+
+// Add log message to splash screen
+function addSplashLog(message) {
+  if (splashWindow && !splashWindow.isDestroyed() && splashWindow.webContents) {
+    splashWindow.webContents.send('splash-log', message);
+  }
+}
+
+// Hide splash screen spinner
+function hideSplashSpinner() {
+  if (splashWindow && !splashWindow.isDestroyed() && splashWindow.webContents) {
+    splashWindow.webContents.send('splash-hide-spinner');
+  }
+}
+
+// Close splash screen
+function closeSplashScreen() {
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.close();
+    splashWindow = null;
+  }
+}
 
 // Function to update view bounds based on window size
 function updateViewBounds() {
@@ -302,26 +377,36 @@ async function setupRemoteServer(hostname, sessionId) {
   
   // Test basic SSH connection first
   console.log('Testing SSH connection...');
+  addSplashLog('Testing SSH connection...');
   await execSSHCommand(hostname, 'echo "SSH connection successful"');
   console.log('✓ SSH connection test successful');
+  addSplashLog('✓ SSH connection test successful');
   
   // Detect architecture
   console.log('Detecting remote architecture...');
+  addSplashLog('Detecting remote architecture...');
   const archOutput = await execSSHCommand(hostname, 'uname -m');
   const arch = mapArchitecture(archOutput.toLowerCase());
   console.log(`✓ Detected architecture: ${archOutput} -> ${arch}`);
+  addSplashLog(`✓ Detected architecture: ${archOutput} -> ${arch}`);
   
   // Setup remote directory
   console.log('Setting up remote directory...');
+  addSplashLog('Setting up remote directory...');
   await execSSHCommand(hostname, 'mkdir -p ~/.socratic-shell/theoldswitcheroo/');
   console.log('✓ Remote directory ready');
+  addSplashLog('✓ Remote directory ready');
   
   // Install VSCode server
+  addSplashLog('Installing VSCode server...');
   await installVSCodeServer(hostname, arch);
+  addSplashLog('✓ VSCode server installation complete');
   
   // Start server with dynamic port selection
   console.log(`Starting VSCode server for session ${sessionId}...`);
+  addSplashLog(`Starting VSCode server for session ${sessionId}...`);
   const serverInfo = await startVSCodeServerWithPortForwarding(hostname, sessionId);
+  addSplashLog(`✓ VSCode server ${sessionId} ready on port ${serverInfo.port}`);
   
   return createSession(sessionId, hostname, serverInfo.port, serverInfo.serverProcess);
 }
@@ -369,6 +454,27 @@ async function createWindow() {
     return;
   }
   
+  // Create and show splash screen
+  const splashWebContents = createSplashScreen();
+  
+  // Wait for splash to load before updating it
+  await new Promise(resolve => {
+    splashWebContents.once('did-finish-load', resolve);
+  });
+  
+  updateSplashHostname(hostname);
+  
+  // TODO: Load existing sessions here
+  updateSplashStatus('Checking for existing sessions...');
+  
+  // For now, create first session (will be replaced with session loading logic)
+  updateSplashStatus('No existing sessions found, creating first session...');
+  updateSplashSessions([{
+    id: 1,
+    status: 'connecting',
+    message: 'Starting VSCode server...'
+  }]);
+  
   // Create first session
   let firstSession;
   try {
@@ -376,11 +482,30 @@ async function createWindow() {
     sessions.push(firstSession);
     activeSessionId = 1;
     console.log('First session created:', firstSession);
+    
+    updateSplashSessions([{
+      id: 1,
+      status: 'connected',
+      message: 'Connected'
+    }]);
+    
   } catch (error) {
     console.error('Failed to setup remote server:', error.message);
-    app.quit();
+    updateSplashSessions([{
+      id: 1,
+      status: 'error',
+      message: `Failed: ${error.message}`
+    }]);
+    
+    // Wait a moment to show error, then quit
+    setTimeout(() => {
+      app.quit();
+    }, 3000);
     return;
   }
+
+  updateSplashStatus('Setting up interface...');
+  hideSplashSpinner();
 
   // Configure user agent to prevent Electron blocking
   const standardUserAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
@@ -467,13 +592,18 @@ async function createWindow() {
 
   firstSession.vscodeView.webContents.on('did-finish-load', () => {
     console.log('VSCode webview finished loading');
-    // Show window only after VSCode loads
-    mainWindow.show();
+    // Close splash and show main window
+    updateSplashStatus('Ready!');
+    setTimeout(() => {
+      closeSplashScreen();
+      mainWindow.show();
+    }, 500);
   });
 
   firstSession.vscodeView.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
     console.log('VSCode webview failed to load:', errorCode, errorDescription);
-    // Show window anyway so user can see the error
+    // Close splash and show window anyway so user can see the error
+    closeSplashScreen();
     mainWindow.show();
   });
 }
