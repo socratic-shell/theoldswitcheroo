@@ -6,6 +6,31 @@ use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+fn detect_remote_architecture(host: &str) -> Result<String, Box<dyn std::error::Error>> {
+    println!("Detecting remote architecture...");
+    let output = Command::new("ssh")
+        .arg(host)
+        .arg("uname -m")
+        .output()?;
+    
+    if !output.status.success() {
+        return Err("Failed to detect remote architecture".into());
+    }
+    
+    let arch_output = String::from_utf8_lossy(&output.stdout).trim().to_lowercase();
+    let openvscode_arch = match arch_output.as_str() {
+        "x86_64" => "linux-x64",
+        "aarch64" | "arm64" => "linux-arm64",
+        _ => {
+            eprintln!("Warning: Unknown architecture '{}', defaulting to linux-x64", arch_output);
+            "linux-x64"
+        }
+    };
+    
+    println!("Detected architecture: {} -> {}", arch_output, openvscode_arch);
+    Ok(openvscode_arch.to_string())
+}
+
 #[derive(Parser)]
 #[command(name = "setup-tool")]
 #[command(about = "Deploy openvscode-server to remote hosts")]
@@ -13,9 +38,9 @@ struct Args {
     #[arg(long)]
     host: String,
     
-    #[arg(long, default_value = "linux-x64")]
-    #[arg(help = "Target architecture: linux-x64, linux-arm64")]
-    arch: String,
+    #[arg(long)]
+    #[arg(help = "Target architecture: linux-x64, linux-arm64 (auto-detected if not specified)")]
+    arch: Option<String>,
     
     #[arg(long)]
     #[arg(help = "Clear cached binaries before installation")]
@@ -51,6 +76,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     println!("{}", String::from_utf8_lossy(&output.stdout).trim());
     
+    // Detect or use specified architecture
+    let arch = match args.arch {
+        Some(arch) => {
+            println!("Using specified architecture: {}", arch);
+            arch
+        }
+        None => detect_remote_architecture(&args.host)?
+    };
+    
     // Create cache directory
     println!("Creating cache directory...");
     let output = Command::new("ssh")
@@ -64,7 +98,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     
     // Download and install openvscode-server with streaming output
-    println!("Installing openvscode-server for {}...", args.arch);
+    println!("Installing openvscode-server for {}...", arch);
     let clear_cache_cmd = if args.clear_cache { "rm -rf openvscode-server.tar.gz openvscode-server" } else { "" };
     let install_script = format!(r#"
         cd ~/.socratic-shell/theoldswitcheroo/
@@ -77,7 +111,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             mv openvscode-server-v1.103.1-{} openvscode-server
             chmod +x openvscode-server/bin/openvscode-server
         fi
-    "#, clear_cache_cmd, args.arch, args.arch);
+    "#, clear_cache_cmd, arch, arch);
     
     let mut install_child = Command::new("ssh")
         .arg(&args.host)
