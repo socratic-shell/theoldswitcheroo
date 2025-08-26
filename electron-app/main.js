@@ -71,7 +71,8 @@ async function createWindow() {
 
   const mainWindow = new BaseWindow({
     width: 1200,
-    height: 800
+    height: 800,
+    show: false // Don't show until views are properly set up
   });
 
   // Create sidebar view for session management
@@ -134,10 +135,14 @@ async function createWindow() {
 
   vscodeView.webContents.on('did-finish-load', () => {
     console.log('VSCode webview finished loading');
+    // Show window only after VSCode loads
+    mainWindow.show();
   });
 
   vscodeView.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
     console.log('VSCode webview failed to load:', errorCode, errorDescription);
+    // Show window anyway so user can see the error
+    mainWindow.show();
   });
 
   // Enable dev tools for debugging
