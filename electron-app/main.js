@@ -97,6 +97,10 @@ async function createWindow() {
     }
   });
 
+  // Configure user agent to prevent Electron blocking
+  const standardUserAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+  vscodeView.webContents.setUserAgent(standardUserAgent);
+
   // Add views to the window
   mainWindow.contentView.addChildView(sidebarView);
   mainWindow.contentView.addChildView(vscodeView);
