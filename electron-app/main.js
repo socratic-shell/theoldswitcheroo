@@ -144,45 +144,16 @@ async function startVSCodeServerWithPortForwarding(hostname, sessionId) {
   return new Promise((resolve, reject) => {
     console.log(`Starting SSH with port forwarding for session ${sessionId}...`);
     
-    // Create unique token file for this session
-    const tokenFile = `/tmp/vscode-token-${sessionId}-${Date.now()}`;
-    
-    // Wrapper script with token file cleanup and dynamic port
+    // Simple server script with auto-shutdown
     const serverScript = `
-      # Create token file
-      TOKEN_FILE="${tokenFile}"
-      echo "session-token" > "$TOKEN_FILE"
-      
-      # Cleanup function - delete token file to trigger VSCode shutdown
-      cleanup() {
-        rm -f "$TOKEN_FILE"
-        exit 0
-      }
-      
-      # Set up signal traps to delete token file
-      trap cleanup TERM INT HUP EXIT
-      
       cd ~/.socratic-shell/theoldswitcheroo/
       
-      # Start VSCode with dynamic port, auto-shutdown, and token file
+      # Start VSCode with dynamic port and auto-shutdown
       ./openvscode-server/bin/openvscode-server \\
         --host 0.0.0.0 \\
         --port 0 \\
         --without-connection-token \\
-        --enable-remote-auto-shutdown \\
-        --connection-token-file="$TOKEN_FILE" 2>&1 &
-      
-      SERVER_PID=$!
-      
-      # Wait for VSCode to output its port
-      sleep 3
-      
-      echo "VSCode server started, checking logs for port..."
-      
-      # Keep script alive - signal traps handle cleanup
-      while true; do 
-        sleep 60
-      done
+        --enable-remote-auto-shutdown 2>&1
     `;
     
     const ssh = spawn('ssh', [
