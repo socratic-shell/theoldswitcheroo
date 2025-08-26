@@ -105,8 +105,12 @@ async function startVSCodeServerWithPortForwarding(hostname, port) {
       # Cleanup function
       cleanup() {
         if [ ! -z "$SERVER_PID" ]; then
-          echo "Cleaning up VSCode server (PID: $SERVER_PID)"
-          kill $SERVER_PID 2>/dev/null
+          echo "Cleaning up VSCode server and all child processes (PID: $SERVER_PID)"
+          # Kill the entire process group to catch all child processes
+          kill -TERM -$SERVER_PID 2>/dev/null || true
+          sleep 1
+          # Force kill if still running
+          kill -KILL -$SERVER_PID 2>/dev/null || true
         fi
         exit 0
       }
@@ -114,8 +118,8 @@ async function startVSCodeServerWithPortForwarding(hostname, port) {
       # Set up signal traps to catch termination
       trap cleanup TERM INT HUP EXIT
       
-      # Start VSCode server in background
-      ./openvscode-server/bin/openvscode-server --host 0.0.0.0 --port ${port} --without-connection-token &
+      # Start VSCode server in background with its own process group
+      setsid ./openvscode-server/bin/openvscode-server --host 0.0.0.0 --port ${port} --without-connection-token &
       SERVER_PID=$!
       
       # Wait a moment for server to start or fail
