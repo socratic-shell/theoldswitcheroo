@@ -1,4 +1,4 @@
-const { app, BaseWindow, WebContentsView } = require('electron');
+const { app, BaseWindow, WebContentsView, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -89,11 +89,27 @@ async function createWindow() {
     }
   });
 
+  // Create persistent session for VSCode
+  const vscodeSession = session.fromPartition('persist:vscode-session');
+  
+  // Configure session for VSCode compatibility
+  vscodeSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': ['default-src * \'unsafe-inline\' \'unsafe-eval\'; script-src * \'unsafe-inline\' \'unsafe-eval\'; connect-src * \'unsafe-inline\'; img-src * data: blob: \'unsafe-inline\'; frame-src *; style-src * \'unsafe-inline\';']
+      }
+    });
+  });
+
   // Create WebContentsView for VSCode
   const vscodeView = new WebContentsView({
     webPreferences: {
       nodeIntegration: false,
-      contextIsolation: true
+      contextIsolation: true,
+      session: vscodeSession,
+      webSecurity: false, // Allow localhost connections
+      allowRunningInsecureContent: true
     }
   });
 
