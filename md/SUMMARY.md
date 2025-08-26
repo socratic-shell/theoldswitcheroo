@@ -22,3 +22,7 @@ Please read them as needed to get up to speed on particular topics.
 
 <!-- This document provides practical implementation guidance for integrating openvscode-server with Electron applications. Content includes: webview configuration, authentication handling, connection troubleshooting, security setup, debugging techniques, and working code examples for Electron + remote VSCode integration. Use this for: solving webview integration issues, debugging connection problems, implementing authentication. -->
 - [Complete Guide to Integrating openvscode-server with Electron](./references/complete-guide-to-integrating-openvscode-server-with-electron.md)
+
+
+<!-- This document provides comprehensive guidance for SSH session management in Node.js applications using system SSH binary wrapping. Content includes: child_process patterns, ssh-config parsing, node-pty terminal emulation, ControlMaster multiplexing, ProxyCommand handling, background process management, security validation, and performance optimization. Use this for: implementing robust SSH connections, handling complex SSH configurations, managing remote processes, debugging SSH connectivity issues. -->
+- [SSH Session Management in Node.js with System Binary Wrapping](./references/SSH-Session-Management-in-Node-with-System-Binary-Wrapping.md)
