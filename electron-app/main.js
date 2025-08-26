@@ -63,7 +63,8 @@ async function createWindow() {
 
   try {
     // Wait for server to be ready before creating UI
-    await checkServerHealth(vscodeUrl);
+    console.log('Skipping server health check for sidebar testing...');
+    // await checkServerHealth(vscodeUrl);
   } catch (error) {
     console.error('Server health check failed:', error.message);
     process.exit(1);
@@ -79,8 +80,21 @@ async function createWindow() {
   const sidebarView = new WebContentsView({
     webPreferences: {
       nodeIntegration: false,
-      contextIsolation: true
+      contextIsolation: true,
+      backgroundThrottling: false
     }
+  });
+
+  // Set background color to prevent garbage pixels
+  sidebarView.setBackgroundColor('#2d2d30');
+
+  // Load sidebar content FIRST with proper path resolution
+  const sidebarPath = path.join(__dirname, 'sidebar.html');
+  await sidebarView.webContents.loadFile(sidebarPath);
+  
+  // Wait for DOM ready
+  await new Promise((resolve) => {
+    sidebarView.webContents.once('dom-ready', resolve);
   });
 
   // Create persistent session for VSCode
@@ -115,14 +129,11 @@ async function createWindow() {
   mainWindow.contentView.addChildView(sidebarView);
   mainWindow.contentView.addChildView(vscodeView);
 
-  // Set bounds: sidebar on left (60px), VSCode on right
+  // Set bounds AFTER content is loaded
   sidebarView.setBounds({ x: 0, y: 0, width: 60, height: 800 });
   vscodeView.setBounds({ x: 60, y: 0, width: 1140, height: 800 });
 
   console.log('Loading VSCode from:', vscodeUrl);
-
-  // Load the session management UI in sidebar
-  sidebarView.webContents.loadFile('index.html');
 
   // Load VSCode in the main view (server is now confirmed ready)
   console.log('About to load VSCode URL in webview...');
