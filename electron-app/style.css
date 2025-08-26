@@ -42,13 +42,5 @@ body {
 
 .main-content {
   flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   background: #1e1e1e;
-}
-
-.placeholder {
-  color: #888;
-  font-size: 18px;
 }
