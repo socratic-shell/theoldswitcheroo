@@ -56,16 +56,16 @@ function checkServerHealth(url, maxRetries = 10) {
 }
 
 async function createWindow() {
-  let session;
+  let sessionData;
   try {
-    session = readSessionFile();
-    console.log('Session data:', session);
+    sessionData = readSessionFile();
+    console.log('Session data:', sessionData);
   } catch (error) {
     console.error(error.message);
     process.exit(1);
   }
 
-  const vscodeUrl = `http://${session.host}:${session.port}`;
+  const vscodeUrl = `http://${sessionData.host}:${sessionData.port}`;
   console.log('Checking server health at:', vscodeUrl);
 
   try {
@@ -137,7 +137,9 @@ async function createWindow() {
   sidebarView.webContents.openDevTools();
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow().catch(console.error);
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
@@ -147,6 +149,6 @@ app.on('window-all-closed', () => {
 
 app.on('activate', () => {
   if (BaseWindow.getAllWindows().length === 0) {
-    createWindow();
+    createWindow().catch(console.error);
   }
 });
