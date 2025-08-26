@@ -140,42 +140,51 @@ async function installVSCodeServer(hostname, arch) {
 }
 
 // Start VSCode server with port forwarding
-async function startVSCodeServerWithPortForwarding(hostname, port) {
+async function startVSCodeServerWithPortForwarding(hostname, sessionId) {
   return new Promise((resolve, reject) => {
-    console.log(`Starting SSH with port forwarding: localhost:${port} -> ${hostname}:${port}`);
+    console.log(`Starting SSH with port forwarding for session ${sessionId}...`);
     
-    // Wrapper script that monitors parent and cleans up server on disconnect
+    // Create unique token file for this session
+    const tokenFile = `/tmp/vscode-token-${sessionId}-${Date.now()}`;
+    
+    // Wrapper script with token file cleanup and dynamic port
     const serverScript = `
-      cd ~/.socratic-shell/theoldswitcheroo/
+      # Create token file
+      TOKEN_FILE="${tokenFile}"
+      echo "session-token" > "$TOKEN_FILE"
       
-      # Cleanup function
+      # Cleanup function - delete token file to trigger VSCode shutdown
       cleanup() {
-        if [ ! -z "$SERVER_PID" ]; then
-          echo "Cleaning up VSCode server and all child processes (PID: $SERVER_PID)"
-          # Kill the entire process group to catch all child processes
-          kill -TERM -$SERVER_PID 2>/dev/null || true
-          sleep 1
-          # Force kill if still running
-          kill -KILL -$SERVER_PID 2>/dev/null || true
-        fi
+        rm -f "$TOKEN_FILE"
         exit 0
       }
       
-      # Set up signal traps to catch termination
+      # Set up signal traps to delete token file
       trap cleanup TERM INT HUP EXIT
       
-      # Start VSCode server in background with its own process group
-      setsid ./openvscode-server/bin/openvscode-server --host 0.0.0.0 --port ${port} --without-connection-token &
+      cd ~/.socratic-shell/theoldswitcheroo/
+      
+      # Start VSCode with dynamic port, auto-shutdown, and token file
+      ./openvscode-server/bin/openvscode-server \\
+        --host 0.0.0.0 \\
+        --port 0 \\
+        --without-connection-token \\
+        --enable-remote-auto-shutdown \\
+        --connection-token-file="$TOKEN_FILE" &
+      
       SERVER_PID=$!
       
-      # Wait a moment for server to start or fail
-      sleep 2
+      # Wait for server to start and get actual port
+      sleep 3
       
-      # Check if server process is still running
-      if ! kill -0 $SERVER_PID 2>/dev/null; then
-        echo "ERROR: openvscode-server failed to start"
-        exit 1
+      # Find the actual port VSCode chose
+      ACTUAL_PORT=\$(netstat -tlnp 2>/dev/null | grep ":$SERVER_PID " | grep -o ':[0-9]*' | head -1 | cut -d: -f2)
+      if [ -z "$ACTUAL_PORT" ]; then
+        # Fallback: try to find any VSCode server port
+        ACTUAL_PORT=\$(netstat -tln | grep LISTEN | grep -E ':8[0-9]{3}' | head -1 | grep -o ':[0-9]*' | cut -d: -f2)
       fi
+      
+      echo "VSCode server started on port: $ACTUAL_PORT"
       
       # Keep script alive - signal traps handle cleanup
       while true; do 
@@ -187,36 +196,51 @@ async function startVSCodeServerWithPortForwarding(hostname, port) {
       '-o', 'ControlMaster=auto',
       '-o', `ControlPath=~/.ssh/cm-${hostname}`,
       '-o', 'ControlPersist=10m',
-      '-L', `${port}:localhost:${port}`,
       hostname,
       serverScript
     ], {
       stdio: ['pipe', 'pipe', 'pipe']
     });
     
+    let actualPort = null;
+    
     ssh.stdout.on('data', (data) => {
       const output = data.toString();
-      console.log(`[VSCode Server ${port}] ${output.trim()}`);
+      console.log(`[VSCode Server ${sessionId}] ${output.trim()}`);
       
-      // Look for server ready indication
-      if (output.includes('Web UI available at')) {
-        console.log(`✓ VSCode server is ready on port ${port}`);
-        resolve(ssh);
+      // Look for port announcement
+      const portMatch = output.match(/VSCode server started on port: (\d+)/);
+      if (portMatch) {
+        actualPort = parseInt(portMatch[1]);
+        console.log(`✓ VSCode server ${sessionId} ready on port ${actualPort}`);
+        
+        // Now set up port forwarding for the actual port
+        const forwardSsh = spawn('ssh', [
+          '-o', 'ControlMaster=auto',
+          '-o', `ControlPath=~/.ssh/cm-${hostname}`,
+          '-o', 'ControlPersist=10m',
+          '-L', `${actualPort}:localhost:${actualPort}`,
+          '-N',
+          hostname
+        ]);
+        
+        resolve({ serverProcess: ssh, forwardProcess: forwardSsh, port: actualPort });
+      }
+      
+      // Look for server ready indication (fallback)
+      if (output.includes('Web UI available at') && !actualPort) {
+        console.log(`✓ VSCode server ${sessionId} is ready (port detection failed, using fallback)`);
+        resolve({ serverProcess: ssh, port: 8765 + sessionId - 1 }); // Fallback to old logic
       }
     });
     
     ssh.stderr.on('data', (data) => {
       const output = data.toString().trim();
-      console.error(`[VSCode Server ${port} Error] ${output}`);
-      
-      // Check for startup failure
-      if (output.includes('ERROR: openvscode-server failed to start')) {
-        reject(new Error(`VSCode server failed to start on port ${port}`));
-      }
+      console.error(`[VSCode Server ${sessionId} Error] ${output}`);
     });
     
     ssh.on('close', (code) => {
-      console.log(`SSH process for port ${port} exited with code ${code}`);
+      console.log(`SSH process for session ${sessionId} exited with code ${code}`);
     });
     
     ssh.on('error', (err) => {
@@ -225,8 +249,8 @@ async function startVSCodeServerWithPortForwarding(hostname, port) {
     
     // Timeout if server doesn't start
     setTimeout(() => {
-      if (!ssh.killed) {
-        reject(new Error(`VSCode server startup timeout on port ${port}`));
+      if (!actualPort) {
+        reject(new Error(`VSCode server startup timeout for session ${sessionId}`));
       }
     }, 60000); // 60 second timeout
   });
@@ -255,12 +279,11 @@ async function setupRemoteServer(hostname, sessionId) {
   // Install VSCode server
   await installVSCodeServer(hostname, arch);
   
-  // Start server with port forwarding
-  const port = 8765 + sessionId - 1; // Session 1 gets 8765, session 2 gets 8766, etc.
-  console.log(`Starting VSCode server on port ${port} for session ${sessionId}...`);
-  const serverProcess = await startVSCodeServerWithPortForwarding(hostname, port);
+  // Start server with dynamic port selection
+  console.log(`Starting VSCode server for session ${sessionId}...`);
+  const serverInfo = await startVSCodeServerWithPortForwarding(hostname, sessionId);
   
-  return createSession(sessionId, hostname, port, serverProcess);
+  return createSession(sessionId, hostname, serverInfo.port, serverInfo.serverProcess);
 }
 
 async function checkServerHealth(url, maxRetries = 10) {
