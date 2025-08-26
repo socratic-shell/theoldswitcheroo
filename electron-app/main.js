@@ -101,6 +101,20 @@ async function startVSCodeServerWithPortForwarding(hostname, port) {
     // Wrapper script that monitors parent and cleans up server on disconnect
     const serverScript = `
       cd ~/.socratic-shell/theoldswitcheroo/
+      
+      # Cleanup function
+      cleanup() {
+        if [ ! -z "$SERVER_PID" ]; then
+          echo "Cleaning up VSCode server (PID: $SERVER_PID)"
+          kill $SERVER_PID 2>/dev/null
+        fi
+        exit 0
+      }
+      
+      # Set up signal traps to catch termination
+      trap cleanup TERM INT HUP EXIT
+      
+      # Start VSCode server in background
       ./openvscode-server/bin/openvscode-server --host 0.0.0.0 --port ${port} --without-connection-token &
       SERVER_PID=$!
       
@@ -114,8 +128,12 @@ async function startVSCodeServerWithPortForwarding(hostname, port) {
       fi
       
       # Monitor parent process and cleanup on exit
-      while kill -0 $PPID 2>/dev/null; do sleep 1; done
-      kill $SERVER_PID 2>/dev/null
+      while kill -0 $PPID 2>/dev/null; do 
+        sleep 1
+      done
+      
+      # Parent died, cleanup
+      cleanup
     `;
     
     const ssh = spawn('ssh', [
