@@ -1,6 +1,10 @@
 use clap::Parser;
 use std::process::{Command, Stdio};
 use std::io::{BufRead, BufReader};
+use std::fs;
+use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Parser)]
 #[command(name = "setup-tool")]
@@ -12,6 +16,17 @@ struct Args {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
+    
+    // Setup Ctrl+C handler
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+    
+    ctrlc::set_handler(move || {
+        println!("\nShutting down...");
+        cleanup_session_file();
+        r.store(false, Ordering::SeqCst);
+        std::process::exit(0);
+    })?;
     
     println!("Connecting to {}...", args.host);
     
@@ -73,6 +88,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     println!("Starting server on port 3000...");
     
+    // Write session file
+    write_session_file(&args.host, 3000)?;
+    
     // Start server with parent monitoring wrapper and stream logs
     let wrapper_script = r#"
         cd ~/.socratic-shell/theoldswitcheroo/
@@ -106,6 +124,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     
     server_child.wait()?;
+    cleanup_session_file();
     
     Ok(())
+}
+
+fn write_session_file(host: &str, port: u16) -> Result<(), Box<dyn std::error::Error>> {
+    let home = std::env::var("HOME")?;
+    let session_dir = format!("{}/.socratic-shell/theoldswitcheroo", home);
+    let session_file = format!("{}/session.json", session_dir);
+    
+    // Create directory if it doesn't exist
+    fs::create_dir_all(&session_dir)?;
+    
+    let session_data = serde_json::json!({
+        "host": host,
+        "port": port
+    });
+    
+    fs::write(&session_file, session_data.to_string())?;
+    Ok(())
+}
+
+fn cleanup_session_file() {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let session_file = format!("{}/.socratic-shell/theoldswitcheroo/session.json", home);
+    
+    if Path::new(&session_file).exists() {
+        let _ = fs::remove_file(&session_file);
+        println!("✓ Remote server terminated.");
+    }
 }
