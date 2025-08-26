@@ -262,6 +262,7 @@ async function createWindow() {
     height: 800,
     show: false, // Don't show until views are properly set up
     backgroundColor: '#1e1e1e',
+    titleBarStyle: 'hidden', // Hide the title bar frame
   });
 
   // Create sidebar view for session management
@@ -304,9 +305,20 @@ async function createWindow() {
   mainWindow.contentView.addChildView(sidebarView);
   mainWindow.contentView.addChildView(vscodeView);
 
-  // Set bounds: sidebar on left (60px), VSCode on right
-  sidebarView.setBounds({ x: 0, y: 0, width: 60, height: 800 });
-  vscodeView.setBounds({ x: 60, y: 0, width: 1140, height: 800 });
+  // Function to update view bounds based on window size
+  function updateViewBounds() {
+    const bounds = mainWindow.getBounds();
+    const sidebarWidth = 60;
+    
+    sidebarView.setBounds({ x: 0, y: 0, width: sidebarWidth, height: bounds.height });
+    vscodeView.setBounds({ x: sidebarWidth, y: 0, width: bounds.width - sidebarWidth, height: bounds.height });
+  }
+
+  // Set initial bounds
+  updateViewBounds();
+
+  // Update bounds when window is resized
+  mainWindow.on('resize', updateViewBounds);
 
   console.log('Loading VSCode from:', vscodeUrl);
 
