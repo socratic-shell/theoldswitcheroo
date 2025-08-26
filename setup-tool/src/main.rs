@@ -88,8 +88,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     println!("Starting server on port 3000...");
     
-    // Write session file
-    write_session_file(&args.host, 3000)?;
+    // Write session file (always localhost since we're port forwarding)
+    write_session_file("localhost", 3000)?;
     
     // Start server with parent monitoring wrapper and stream logs
     let wrapper_script = r#"
@@ -101,13 +101,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     "#;
     
     println!("✓ Connection established.");
-    println!("  VSCode available at: http://{}:3000", args.host);
+    println!("  VSCode available at: http://localhost:3000 (forwarded from {}:3000)", args.host);
     println!("  ");
     println!("  Press Ctrl+C to shutdown and cleanup.");
     println!("");
     
-    // Stream server logs
+    // Stream server logs with port forwarding
     let mut server_child = Command::new("ssh")
+        .arg("-L")
+        .arg("3000:localhost:3000")
         .arg(&args.host)
         .arg(wrapper_script)
         .stdout(Stdio::piped())
