@@ -9,6 +9,8 @@ const { spawn } = require('child_process');
 let sessions = [];
 let activeSessionId = null;
 let currentHostname = null;
+let mainWindow = null;
+let sidebarView = null;
 
 // Session object structure
 function createSession(id, hostname, port, serverProcess) {
@@ -18,8 +20,50 @@ function createSession(id, hostname, port, serverProcess) {
     port,
     serverProcess,
     host: 'localhost', // Always localhost due to port forwarding
-    createdAt: new Date()
+    createdAt: new Date(),
+    vscodeView: null // Will be created when first accessed
   };
+}
+
+// Switch to a different session
+async function switchToSession(sessionId) {
+  const session = sessions.find(s => s.id === sessionId);
+  if (!session) {
+    throw new Error(`Session ${sessionId} not found`);
+  }
+  
+  console.log(`Switching to session ${sessionId} on port ${session.port}`);
+  
+  // Create VSCode view for this session if it doesn't exist
+  if (!session.vscodeView) {
+    session.vscodeView = new WebContentsView({
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true
+      }
+    });
+    
+    // Wait for server to be ready
+    const vscodeUrl = `http://${session.host}:${session.port}`;
+    await checkServerHealth(vscodeUrl);
+    
+    // Load VSCode in the view
+    await session.vscodeView.webContents.loadURL(vscodeUrl);
+  }
+  
+  // Remove current VSCode view if any
+  const currentSession = sessions.find(s => s.id === activeSessionId);
+  if (currentSession && currentSession.vscodeView) {
+    mainWindow.contentView.removeChildView(currentSession.vscodeView);
+  }
+  
+  // Add the new session's view
+  mainWindow.contentView.addChildView(session.vscodeView);
+  
+  // Update bounds
+  updateViewBounds();
+  
+  console.log(`✓ Switched to session ${sessionId}`);
 }
 
 // Create new session
@@ -56,6 +100,23 @@ ipcMain.handle('create-session', async () => {
       success: false, 
       error: error.message 
     };
+  }
+});
+
+ipcMain.handle('switch-session', async (event, sessionId) => {
+  console.log(`Switching to session ${sessionId}`);
+  
+  const session = sessions.find(s => s.id === sessionId);
+  if (!session) {
+    return { success: false, error: `Session ${sessionId} not found` };
+  }
+  
+  try {
+    await switchToSession(sessionId);
+    activeSessionId = sessionId;
+    return { success: true, sessionId };
+  } catch (error) {
+    return { success: false, error: error.message };
   }
 });
 
@@ -320,7 +381,7 @@ async function createWindow() {
     return;
   }
 
-  const mainWindow = new BaseWindow({
+  mainWindow = new BaseWindow({
     width: 1200,
     height: 800,
     show: false, // Don't show until views are properly set up
@@ -329,7 +390,7 @@ async function createWindow() {
   });
 
   // Create sidebar view for session management
-  const sidebarView = new WebContentsView({
+  sidebarView = new WebContentsView({
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false // Disable for IPC access
@@ -351,8 +412,8 @@ async function createWindow() {
     });
   });
 
-  // Create WebContentsView for VSCode
-  const vscodeView = new WebContentsView({
+  // Create WebContentsView for first session
+  firstSession.vscodeView = new WebContentsView({
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -361,12 +422,12 @@ async function createWindow() {
       allowRunningInsecureContent: true
     }
   });
-  vscodeView.setBackgroundColor('#2d2d30');
-  vscodeView.webContents.setUserAgent(standardUserAgent);
+  firstSession.vscodeView.setBackgroundColor('#2d2d30');
+  firstSession.vscodeView.webContents.setUserAgent(standardUserAgent);
 
   // Add views to the window
   mainWindow.contentView.addChildView(sidebarView);
-  mainWindow.contentView.addChildView(vscodeView);
+  mainWindow.contentView.addChildView(firstSession.vscodeView);
 
   // Function to update view bounds based on window size
   function updateViewBounds() {
@@ -374,7 +435,12 @@ async function createWindow() {
     const sidebarWidth = 75;
     
     sidebarView.setBounds({ x: 0, y: 0, width: sidebarWidth, height: bounds.height });
-    vscodeView.setBounds({ x: sidebarWidth, y: 0, width: bounds.width - sidebarWidth, height: bounds.height });
+    
+    // Update bounds for active session's view
+    const activeSession = sessions.find(s => s.id === activeSessionId);
+    if (activeSession && activeSession.vscodeView) {
+      activeSession.vscodeView.setBounds({ x: sidebarWidth, y: 0, width: bounds.width - sidebarWidth, height: bounds.height });
+    }
   }
 
   // Set initial bounds
@@ -390,20 +456,20 @@ async function createWindow() {
 
   // Load VSCode in the main view (server is now confirmed ready)
   console.log('About to load VSCode URL in webview...');
-  vscodeView.webContents.loadURL(vscodeUrl);
+  firstSession.vscodeView.webContents.loadURL(vscodeUrl);
 
   // Add webview event listeners for debugging
-  vscodeView.webContents.on('did-start-loading', () => {
+  firstSession.vscodeView.webContents.on('did-start-loading', () => {
     console.log('VSCode webview started loading');
   });
 
-  vscodeView.webContents.on('did-finish-load', () => {
+  firstSession.vscodeView.webContents.on('did-finish-load', () => {
     console.log('VSCode webview finished loading');
     // Show window only after VSCode loads
     mainWindow.show();
   });
 
-  vscodeView.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+  firstSession.vscodeView.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
     console.log('VSCode webview failed to load:', errorCode, errorDescription);
     // Show window anyway so user can see the error
     mainWindow.show();
