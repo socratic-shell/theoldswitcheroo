@@ -1,0 +1,2 @@
+[alias]
+start-server = "run --manifest-path setup-tool/Cargo.toml --"
