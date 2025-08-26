@@ -31,10 +31,16 @@ function getHostname() {
   return args[0];
 }
 
-// Execute SSH command using system ssh
+// Execute SSH command using system ssh with ControlMaster
 async function execSSHCommand(hostname, command) {
   return new Promise((resolve, reject) => {
-    const ssh = spawn('ssh', [hostname, command], {
+    const ssh = spawn('ssh', [
+      '-o', 'ControlMaster=auto',
+      '-o', `ControlPath=~/.ssh/cm-${hostname}`,
+      '-o', 'ControlPersist=10m',
+      hostname, 
+      command
+    ], {
       stdio: ['pipe', 'pipe', 'pipe']
     });
     
@@ -138,6 +144,9 @@ async function startVSCodeServerWithPortForwarding(hostname, port) {
     `;
     
     const ssh = spawn('ssh', [
+      '-o', 'ControlMaster=auto',
+      '-o', `ControlPath=~/.ssh/cm-${hostname}`,
+      '-o', 'ControlPersist=10m',
       '-L', `${port}:localhost:${port}`,
       hostname,
       serverScript
