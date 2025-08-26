@@ -100,6 +100,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         cd ~/.socratic-shell/theoldswitcheroo/
         ./openvscode-server/bin/openvscode-server --host 0.0.0.0 --port 8765 --without-connection-token &
         SERVER_PID=$!
+        
+        # Wait a moment for server to start or fail
+        sleep 2
+        
+        # Check if server process is still running
+        if ! kill -0 $SERVER_PID 2>/dev/null; then
+            echo "ERROR: openvscode-server failed to start"
+            echo "This is often caused by architecture mismatch (wrong --arch parameter)"
+            echo "Try: --arch linux-arm64 for ARM64 systems, --arch linux-x64 for x86_64 systems"
+            exit 1
+        fi
+        
+        # Monitor parent process and cleanup on exit
         while kill -0 $PPID 2>/dev/null; do sleep 1; done
         kill $SERVER_PID 2>/dev/null
     "#;
