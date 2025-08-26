@@ -1,0 +1,12 @@
+{
+  "name": "theoldswitcheroo-electron",
+  "version": "1.0.0",
+  "description": "VSCode multiplexer for AI agent workspaces",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^32.0.0"
+  }
+}
