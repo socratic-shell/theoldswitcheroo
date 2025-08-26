@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BaseWindow, WebContentsView } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -18,29 +18,52 @@ function createWindow() {
   let session;
   try {
     session = readSessionFile();
+    console.log('Session data:', session);
   } catch (error) {
     console.error(error.message);
     process.exit(1);
   }
 
-  const mainWindow = new BrowserWindow({
+  const mainWindow = new BaseWindow({
     width: 1200,
-    height: 800,
+    height: 800
+  });
+
+  // Create sidebar view for session management
+  const sidebarView = new WebContentsView({
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-      webviewTag: true
+      nodeIntegration: false,
+      contextIsolation: true
     }
   });
 
-  // Pass session info to renderer
-  mainWindow.webContents.once('dom-ready', () => {
-    mainWindow.webContents.executeJavaScript(`
-      document.getElementById('vscode-webview').src = 'http://${session.host}:${session.port}';
-    `);
+  // Create WebContentsView for VSCode
+  const vscodeView = new WebContentsView({
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true
+    }
   });
 
-  mainWindow.loadFile('index.html');
+  // Add views to the window
+  mainWindow.contentView.addChildView(sidebarView);
+  mainWindow.contentView.addChildView(vscodeView);
+
+  // Set bounds: sidebar on left (60px), VSCode on right
+  sidebarView.setBounds({ x: 0, y: 0, width: 60, height: 800 });
+  vscodeView.setBounds({ x: 60, y: 0, width: 1140, height: 800 });
+
+  const vscodeUrl = `http://${session.host}:${session.port}`;
+  console.log('Loading VSCode from:', vscodeUrl);
+
+  // Load the session management UI in sidebar
+  sidebarView.webContents.loadFile('index.html');
+
+  // Load VSCode in the main view
+  vscodeView.webContents.loadURL(vscodeUrl);
+
+  // Enable dev tools for debugging
+  sidebarView.webContents.openDevTools();
 }
 
 app.whenReady().then(createWindow);
@@ -52,7 +75,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
+  if (BaseWindow.getAllWindows().length === 0) {
     createWindow();
   }
 });
