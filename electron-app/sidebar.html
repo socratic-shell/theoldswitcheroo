@@ -102,6 +102,20 @@
     <button class="toolbar-button" id="settings-button">⚙</button>
     <button class="toolbar-button add-button" id="add-button">+</button>
   </div>
+
+  <script>
+    const { ipcRenderer } = require('electron');
+    
+    document.getElementById('add-button').addEventListener('click', async () => {
+      console.log('+ button clicked in sidebar');
+      try {
+        const result = await ipcRenderer.invoke('create-session');
+        console.log('IPC result:', result);
+      } catch (error) {
+        console.error('IPC error:', error);
+      }
+    });
+  </script>
 </body>
 
 </html>

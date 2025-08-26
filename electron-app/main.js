@@ -1,4 +1,4 @@
-const { app, BaseWindow, WebContentsView, session } = require('electron');
+const { app, BaseWindow, WebContentsView, session, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -20,6 +20,12 @@ function createSession(id, hostname, port, serverProcess) {
     createdAt: new Date()
   };
 }
+
+// IPC handlers
+ipcMain.handle('create-session', async () => {
+  console.log('+ button clicked! Creating new session...');
+  return { success: true, message: 'Session creation requested' };
+});
 
 // Get hostname from command line args
 function getHostname() {
@@ -306,8 +312,8 @@ async function createWindow() {
   // Create sidebar view for session management
   const sidebarView = new WebContentsView({
     webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true
+      nodeIntegration: true,
+      contextIsolation: false // Disable for IPC access
     }
   });
   sidebarView.setBackgroundColor('#2d2d30'); // CRITICAL - prevents garbage pixels
