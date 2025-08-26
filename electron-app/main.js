@@ -15,44 +15,37 @@ function readSessionFile() {
   }
 }
 
-function checkServerHealth(url, maxRetries = 10) {
-  return new Promise((resolve, reject) => {
-    let retries = 0;
-    
-    function attempt() {
-      const req = http.get(url, (res) => {
-        if (res.statusCode === 200) {
-          console.log('✓ Server is ready');
-          resolve(true);
-        } else {
-          retry();
-        }
+async function checkServerHealth(url, maxRetries = 10) {
+  for (let retries = 0; retries < maxRetries; retries++) {
+    try {
+      const response = await new Promise((resolve, reject) => {
+        const req = http.get(url, (res) => {
+          resolve(res);
+        });
+        
+        req.on('error', reject);
+        req.setTimeout(2000, () => {
+          req.destroy();
+          reject(new Error('Timeout'));
+        });
       });
       
-      req.on('error', () => {
-        retry();
-      });
-      
-      req.setTimeout(2000, () => {
-        req.destroy();
-        retry();
-      });
-    }
-    
-    function retry() {
-      retries++;
-      if (retries >= maxRetries) {
-        reject(new Error(`Server not ready after ${maxRetries} attempts`));
-        return;
+      if (response.statusCode === 200) {
+        console.log('✓ Server is ready');
+        return true;
       }
-      
-      const delay = Math.min(1000 * Math.pow(2, retries - 1), 5000); // Exponential backoff, max 5s
-      console.log(`Server not ready, retrying in ${delay}ms... (${retries}/${maxRetries})`);
-      setTimeout(attempt, delay);
+    } catch (error) {
+      // Continue to retry
     }
     
-    attempt();
-  });
+    if (retries < maxRetries - 1) {
+      const delay = Math.min(1000 * Math.pow(2, retries), 5000);
+      console.log(`Server not ready, retrying in ${delay}ms... (${retries + 1}/${maxRetries})`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  throw new Error(`Server not ready after ${maxRetries} attempts`);
 }
 
 async function createWindow() {
@@ -131,7 +124,21 @@ async function createWindow() {
   sidebarView.webContents.loadFile('index.html');
 
   // Load VSCode in the main view (server is now confirmed ready)
+  console.log('About to load VSCode URL in webview...');
   vscodeView.webContents.loadURL(vscodeUrl);
+
+  // Add webview event listeners for debugging
+  vscodeView.webContents.on('did-start-loading', () => {
+    console.log('VSCode webview started loading');
+  });
+
+  vscodeView.webContents.on('did-finish-load', () => {
+    console.log('VSCode webview finished loading');
+  });
+
+  vscodeView.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    console.log('VSCode webview failed to load:', errorCode, errorDescription);
+  });
 
   // Enable dev tools for debugging
   sidebarView.webContents.openDevTools();
