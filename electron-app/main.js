@@ -128,12 +128,9 @@ async function startVSCodeServerWithPortForwarding(hostname, port) {
       fi
       
       # Monitor parent process and cleanup on exit
-      while kill -0 $PPID 2>/dev/null; do 
+      while true; do 
         sleep 1
       done
-      
-      # Parent died, cleanup
-      cleanup
     `;
     
     const ssh = spawn('ssh', [
