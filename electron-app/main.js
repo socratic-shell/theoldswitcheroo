@@ -26,7 +26,7 @@ function saveSessions(hostname, sessionList) {
   try {
     const dir = path.dirname(SESSION_FILE);
     fs.mkdirSync(dir, { recursive: true });
-    
+
     const data = {
       hostname,
       sessions: sessionList.map(s => ({
@@ -36,7 +36,7 @@ function saveSessions(hostname, sessionList) {
         lastSeen: new Date().toISOString()
       }))
     };
-    
+
     fs.writeFileSync(SESSION_FILE, JSON.stringify(data, null, 2));
     console.log(`Saved ${sessionList.length} sessions to ${SESSION_FILE}`);
   } catch (error) {
@@ -50,6 +50,7 @@ let activeSessionId = null;
 let currentHostname = null;
 let mainWindow = null;
 let sidebarView = null;
+let vscodeSession = null; // Global persistent session
 
 class SplashScreen {
   constructor() {
@@ -102,6 +103,20 @@ class SplashScreen {
   }
 }
 
+// Update sidebar with current sessions
+function updateSidebar() {
+  if (sidebarView && sidebarView.webContents) {
+    const sessionData = sessions.map(s => ({
+      id: s.id,
+      active: s.id === activeSessionId
+    }));
+    sidebarView.webContents.postMessage('update-sessions', {
+      sessions: sessionData,
+      activeSessionId
+    });
+  }
+}
+
 // Function to update view bounds based on window size
 function updateViewBounds() {
   if (!mainWindow) return;
@@ -127,7 +142,8 @@ function createSession(id, hostname, port, serverProcess) {
     serverProcess,
     host: 'localhost', // Always localhost due to port forwarding
     createdAt: new Date(),
-    vscodeView: null // Will be created when first accessed
+    vscodeView: null, // Will be created when first accessed
+    metaView: null // Will be created when first accessed
   };
 }
 
@@ -145,9 +161,14 @@ async function switchToSession(sessionId) {
     session.vscodeView = new WebContentsView({
       webPreferences: {
         nodeIntegration: false,
-        contextIsolation: true
+        contextIsolation: true,
+        session: vscodeSession, // Use the global persistent session
+        webSecurity: false,
+        allowRunningInsecureContent: true
       }
     });
+    session.vscodeView.setBackgroundColor('#2d2d30');
+    session.vscodeView.webContents.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
     // Wait for server to be ready
     const vscodeUrl = `http://${session.host}:${session.port}`;
@@ -169,6 +190,9 @@ async function switchToSession(sessionId) {
   // Update bounds
   updateViewBounds();
 
+  // Update sidebar to reflect active session
+  updateSidebar();
+
   console.log(`✓ Switched to session ${sessionId}`);
 }
 
@@ -178,12 +202,17 @@ async function createNewSession(hostname) {
   console.log(`Creating session ${nextSessionId}...`);
 
   try {
-    const newSession = await setupRemoteServer(null, hostname, nextSessionId);
+    // Create a simple logger for when there's no splash screen
+    const logger = {
+      log: (message) => console.log(message)
+    };
+
+    const newSession = await setupRemoteServer(logger, hostname, nextSessionId);
     sessions.push(newSession);
-    
+
     // Save updated session list
     saveSessions(hostname, sessions);
-    
+
     console.log(`Session ${nextSessionId} created successfully`);
     return newSession;
   } catch (error) {
@@ -225,6 +254,158 @@ ipcMain.handle('switch-session', async (event, sessionId) => {
     await switchToSession(sessionId);
     activeSessionId = sessionId;
     return { success: true, sessionId };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('kill-session', async (event, sessionId) => {
+  console.log(`Killing session ${sessionId}`);
+
+  const sessionIndex = sessions.findIndex(s => s.id === sessionId);
+  if (sessionIndex === -1) {
+    return { success: false, error: `Session ${sessionId} not found` };
+  }
+
+  const session = sessions[sessionIndex];
+  
+  try {
+    // Kill the server process if it exists
+    if (session.serverProcess) {
+      session.serverProcess.kill('SIGTERM');
+      console.log(`Killed server process for session ${sessionId}`);
+    }
+    
+    // Remove the session from our list
+    sessions.splice(sessionIndex, 1);
+    
+    // If we killed the active session, switch to another one
+    if (activeSessionId === sessionId) {
+      if (sessions.length > 0) {
+        await switchToSession(sessions[0].id);
+        activeSessionId = sessions[0].id;
+      } else {
+        // No sessions left, create a new one
+        const newSession = await createNewSession(currentHostname);
+        activeSessionId = newSession.id;
+      }
+    }
+    
+    // Save updated session list
+    saveSessions(currentHostname, sessions);
+    
+    // Update sidebar
+    updateSidebar();
+    
+    return { success: true, sessionId };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('kill-others', async (event, keepSessionId) => {
+  console.log(`Killing all sessions except ${keepSessionId}`);
+
+  const keepSession = sessions.find(s => s.id === keepSessionId);
+  if (!keepSession) {
+    return { success: false, error: `Session ${keepSessionId} not found` };
+  }
+
+  try {
+    // Kill all other sessions
+    const sessionsToKill = sessions.filter(s => s.id !== keepSessionId);
+    let killedCount = 0;
+    
+    for (const session of sessionsToKill) {
+      if (session.serverProcess) {
+        session.serverProcess.kill('SIGTERM');
+        console.log(`Killed server process for session ${session.id}`);
+        killedCount++;
+      }
+    }
+    
+    // Keep only the specified session
+    sessions = [keepSession];
+    
+    // Switch to the kept session if it's not already active
+    if (activeSessionId !== keepSessionId) {
+      await switchToSession(keepSessionId);
+      activeSessionId = keepSessionId;
+    }
+    
+    // Save updated session list
+    saveSessions(currentHostname, sessions);
+    
+    // Update sidebar
+    updateSidebar();
+    
+    return { success: true, killedCount, keptSessionId: keepSessionId };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('show-meta-view', async (event, sessionId) => {
+  console.log(`Showing meta-view for session ${sessionId}`);
+
+  const session = sessions.find(s => s.id === sessionId);
+  if (!session) {
+    return { success: false, error: `Session ${sessionId} not found` };
+  }
+
+  try {
+    // If we're already showing meta-view for this session, switch back to VSCode
+    const currentSession = sessions.find(s => s.id === activeSessionId);
+    if (currentSession && currentSession.metaView && 
+        mainWindow.contentView.children.includes(currentSession.metaView) &&
+        activeSessionId === sessionId) {
+      // Switch back to VSCode view
+      await switchToSession(sessionId);
+      return { success: true, sessionId, action: 'switched-to-vscode' };
+    }
+
+    // Create meta-view if it doesn't exist
+    if (!session.metaView) {
+      session.metaView = new WebContentsView({
+        webPreferences: {
+          nodeIntegration: true,
+          contextIsolation: false
+        }
+      });
+      session.metaView.setBackgroundColor('#1e1e1e');
+      
+      // Wait for meta-view to load before sending data
+      await new Promise((resolve) => {
+        session.metaView.webContents.once('did-finish-load', resolve);
+        session.metaView.webContents.loadFile('meta-view.html');
+      });
+    }
+
+    // Remove current view
+    if (currentSession && currentSession.vscodeView) {
+      mainWindow.contentView.removeChildView(currentSession.vscodeView);
+    }
+    if (currentSession && currentSession.metaView && currentSession.id !== sessionId) {
+      mainWindow.contentView.removeChildView(currentSession.metaView);
+    }
+
+    // Add meta-view
+    mainWindow.contentView.addChildView(session.metaView);
+    updateViewBounds();
+
+    // Send session data to meta-view (now that it's loaded)
+    session.metaView.webContents.send('meta-view-data', {
+      id: session.id,
+      port: session.port,
+      host: session.host,
+      serverProcess: session.serverProcess,
+      createdAt: session.createdAt
+    });
+
+    activeSessionId = sessionId;
+    updateSidebar();
+
+    return { success: true, sessionId, action: 'switched-to-meta' };
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -397,34 +578,36 @@ async function startVSCodeServerWithPortForwarding(hostname, sessionId) {
 }
 
 // SSH connection and setup using system ssh
-async function setupRemoteServer(splash, hostname, sessionId) {
-  splash.log(`Setting up remote server for session ${sessionId}...`);
+//
+// The "logger" object must have a `log` method.
+async function setupRemoteServer(logger, hostname, sessionId) {
+  logger.log(`Setting up remote server for session ${sessionId}...`);
 
   // Test basic SSH connection first
-  splash.log('Testing SSH connection...');
+  logger.log('Testing SSH connection...');
   await execSSHCommand(hostname, 'echo "SSH connection successful"');
-  splash.log('✓ SSH connection test successful');
+  logger.log('✓ SSH connection test successful');
 
   // Detect architecture
-  splash.log('Detecting remote architecture...');
+  logger.log('Detecting remote architecture...');
   const archOutput = await execSSHCommand(hostname, 'uname -m');
   const arch = mapArchitecture(archOutput.toLowerCase());
-  splash.log(`✓ Detected architecture: ${archOutput} -> ${arch}`);
+  logger.log(`✓ Detected architecture: ${archOutput} -> ${arch}`);
 
   // Setup remote directory
-  splash.log('Setting up remote directory...');
+  logger.log('Setting up remote directory...');
   await execSSHCommand(hostname, 'mkdir -p ~/.socratic-shell/theoldswitcheroo/');
-  splash.log('✓ Remote directory ready');
+  logger.log('✓ Remote directory ready');
 
   // Install VSCode server
-  splash.log('Installing VSCode server...');
+  logger.log('Installing VSCode server...');
   await installVSCodeServer(hostname, arch);
-  splash.log('✓ VSCode server installation complete');
+  logger.log('✓ VSCode server installation complete');
 
   // Start server with dynamic port selection
-  splash.log(`Starting VSCode server for session ${sessionId}...`);
+  logger.log(`Starting VSCode server for session ${sessionId}...`);
   const serverInfo = await startVSCodeServerWithPortForwarding(hostname, sessionId);
-  splash.log(`✓ VSCode server ${sessionId} ready on port ${serverInfo.port}`);
+  logger.log(`✓ VSCode server ${sessionId} ready on port ${serverInfo.port}`);
 
   return createSession(sessionId, hostname, serverInfo.port, serverInfo.serverProcess);
 }
@@ -437,14 +620,14 @@ async function checkSessionHealth(sessionData) {
       const req = http.get(url, (res) => {
         resolve(res);
       });
-      
+
       req.on('error', reject);
       req.setTimeout(2000, () => {
         req.destroy();
         reject(new Error('Timeout'));
       });
     });
-    
+
     return response.statusCode === 200;
   } catch (error) {
     return false;
@@ -494,6 +677,19 @@ async function createWindow() {
     return;
   }
 
+  // Create persistent session for this hostname (shared across all sessions)
+  vscodeSession = session.fromPartition(`persist:vscode-${hostname}`);
+
+  // Configure session for VSCode compatibility
+  vscodeSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': ['default-src * \'unsafe-inline\' \'unsafe-eval\'; script-src * \'unsafe-inline\' \'unsafe-eval\'; connect-src * \'unsafe-inline\'; img-src * data: blob: \'unsafe-inline\'; frame-src *; style-src * \'unsafe-inline\';']
+      }
+    });
+  });
+
   // Create and show splash screen
   let splash = new SplashScreen();
 
@@ -507,14 +703,14 @@ async function createWindow() {
   // Load existing sessions
   splash.log('Checking for existing sessions...');
   const savedData = loadSessions();
-  
+
   if (savedData.hostname === hostname && savedData.sessions.length > 0) {
     splash.log(`Found ${savedData.sessions.length} existing sessions, checking health...`);
-    
+
     // Check health of each saved session
     for (const sessionData of savedData.sessions) {
       splash.log(`Checking session ${sessionData.id}...`);
-      
+
       const isAlive = await checkSessionHealth(sessionData);
       if (isAlive) {
         splash.log(`✓ Session ${sessionData.id}: Reconnecting to port ${sessionData.port}`);
@@ -533,12 +729,12 @@ async function createWindow() {
         }
       }
     }
-    
+
     if (sessions.length > 0) {
       activeSessionId = sessions[0].id;
     }
   }
-  
+
   // If no sessions exist, create first session
   if (sessions.length === 0) {
     splash.log('No existing sessions found, creating first session...');
@@ -557,7 +753,8 @@ async function createWindow() {
   // Save current session state
   saveSessions(hostname, sessions);
 
-  splash.log('Setting up interface...');
+  // Update sidebar with loaded sessions
+  splash.log('Updating interface...');
 
   // Configure user agent to prevent Electron blocking
   const standardUserAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
@@ -594,19 +791,6 @@ async function createWindow() {
   sidebarView.setBackgroundColor('#2d2d30'); // CRITICAL - prevents garbage pixels
   sidebarView.webContents.setUserAgent(standardUserAgent); // Use same UA as VSCode view
 
-  // Create persistent session for VSCode
-  const vscodeSession = session.fromPartition('persist:vscode-session');
-
-  // Configure session for VSCode compatibility
-  vscodeSession.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': ['default-src * \'unsafe-inline\' \'unsafe-eval\'; script-src * \'unsafe-inline\' \'unsafe-eval\'; connect-src * \'unsafe-inline\'; img-src * data: blob: \'unsafe-inline\'; frame-src *; style-src * \'unsafe-inline\';']
-      }
-    });
-  });
-
   // Create WebContentsView for active session
   activeSession.vscodeView = new WebContentsView({
     webPreferences: {
@@ -634,6 +818,11 @@ async function createWindow() {
 
   // Load the session management UI in sidebar
   sidebarView.webContents.loadFile('sidebar.html');
+
+  // Update sidebar once it loads
+  sidebarView.webContents.once('did-finish-load', () => {
+    updateSidebar();
+  });
 
   // Load VSCode in the main view (server is now confirmed ready)
   console.log('About to load VSCode URL in webview...');

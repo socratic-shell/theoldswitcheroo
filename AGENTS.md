@@ -23,3 +23,12 @@ When checkpointing:
 * Update tracking issue (if any)
 * Check that mdbook is up-to-date if any user-impacting or design changes have been made
     * If mdbook is not up-to-date, ask user how to proceed
+
+# random factoids to remember
+
+In Electron, IPC works as follows
+
+* Main process: `webContents.postMessage(channel, data)`
+* Renderer process: `ipcRenderer.on(channel, callback)`
+
+Do NOT use `webContents.send`.

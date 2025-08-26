@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Session Management</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #1e1e1e;
+            color: #cccccc;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .session-info {
+            background: #2d2d30;
+            border-radius: 8px;
+            padding: 32px;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+        }
+        
+        .session-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: #007acc;
+            margin-bottom: 24px;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 32px;
+            text-align: left;
+        }
+        
+        .info-item {
+            background: #3c3c3c;
+            padding: 12px;
+            border-radius: 4px;
+        }
+        
+        .info-label {
+            font-size: 12px;
+            color: #999;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+        
+        .info-value {
+            font-size: 16px;
+            color: #fff;
+            font-weight: 500;
+        }
+        
+        .actions {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+        
+        .action-button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .action-button.primary {
+            background: #007acc;
+            color: white;
+        }
+        
+        .action-button.primary:hover {
+            background: #40a6ff;
+        }
+        
+        .action-button.danger {
+            background: #d73a49;
+            color: white;
+        }
+        
+        .action-button.danger:hover {
+            background: #cb2431;
+        }
+        
+        .action-button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="session-info">
+        <div class="session-title">Session <span id="session-id">1</span></div>
+        
+        <div class="info-grid">
+            <div class="info-item">
+                <div class="info-label">Port</div>
+                <div class="info-value" id="session-port">8080</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Status</div>
+                <div class="info-value" id="session-status">Running</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Host</div>
+                <div class="info-value" id="session-host">localhost</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Created</div>
+                <div class="info-value" id="session-created">Just now</div>
+            </div>
+        </div>
+        
+        <div class="actions">
+            <button class="action-button primary" id="back-button">Back to VSCode</button>
+            <button class="action-button danger" id="kill-session-button">Kill Session</button>
+            <button class="action-button danger" id="kill-others-button">Kill Others</button>
+        </div>
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+        
+        let currentSessionId = null;
+        
+        // Handle session data updates
+        ipcRenderer.on('meta-view-data', (event, sessionData) => {
+            currentSessionId = sessionData.id;
+            
+            document.getElementById('session-id').textContent = sessionData.id;
+            document.getElementById('session-port').textContent = sessionData.port;
+            document.getElementById('session-host').textContent = sessionData.host;
+            document.getElementById('session-status').textContent = sessionData.serverProcess ? 'Running' : 'Stopped';
+            
+            // Format creation time
+            const created = new Date(sessionData.createdAt);
+            const now = new Date();
+            const diffMinutes = Math.floor((now - created) / (1000 * 60));
+            
+            let createdText;
+            if (diffMinutes < 1) {
+                createdText = 'Just now';
+            } else if (diffMinutes < 60) {
+                createdText = `${diffMinutes}m ago`;
+            } else {
+                const diffHours = Math.floor(diffMinutes / 60);
+                createdText = `${diffHours}h ago`;
+            }
+            
+            document.getElementById('session-created').textContent = createdText;
+        });
+        
+        // Back to VSCode button
+        document.getElementById('back-button').addEventListener('click', () => {
+            if (currentSessionId) {
+                ipcRenderer.invoke('switch-session', currentSessionId);
+            }
+        });
+        
+        // Kill session button
+        document.getElementById('kill-session-button').addEventListener('click', async () => {
+            if (currentSessionId) {
+                const result = await ipcRenderer.invoke('kill-session', currentSessionId);
+                if (!result.success) {
+                    alert(`Failed to kill session: ${result.error}`);
+                }
+            }
+        });
+        
+        // Kill others button
+        document.getElementById('kill-others-button').addEventListener('click', async () => {
+            if (currentSessionId) {
+                const result = await ipcRenderer.invoke('kill-others', currentSessionId);
+                if (!result.success) {
+                    alert(`Failed to kill other sessions: ${result.error}`);
+                }
+            }
+        });
+    </script>
+</body>
+</html>

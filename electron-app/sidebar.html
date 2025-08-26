@@ -90,12 +90,48 @@
       background: #464647;
       border-radius: 2px;
     }
+
+    /* Context menu */
+    .context-menu {
+      position: fixed;
+      background: #3c3c3c;
+      border: 1px solid #464647;
+      border-radius: 4px;
+      padding: 4px 0;
+      z-index: 1000;
+      display: none;
+      min-width: 55px;
+      width: 55px;
+    }
+
+    .context-menu-item {
+      padding: 6px 8px;
+      color: #cccccc;
+      cursor: pointer;
+      font-size: 11px;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .context-menu-item:hover {
+      background: #464647;
+    }
+
+    .context-menu-item.danger {
+      color: #f48771;
+    }
+
+    .context-menu-item.danger:hover {
+      background: #5a2d2d;
+    }
   </style>
 </head>
 
 <body>
-  <div class="sessions-container">
-    <div class="session-box active">1</div>
+  <div class="sessions-container" id="sessions-container">
+    <!-- Sessions will be populated dynamically -->
   </div>
   
   <div class="bottom-toolbar">
@@ -105,6 +141,101 @@
 
   <script>
     const { ipcRenderer } = require('electron');
+    
+    // Handle session updates from main process
+    ipcRenderer.on('update-sessions', (event, data) => {
+      updateSessionsUI(data.sessions, data.activeSessionId);
+    });
+    
+    // Update the sessions UI
+    function updateSessionsUI(sessions, activeSessionId) {
+      const container = document.getElementById('sessions-container');
+      container.innerHTML = '';
+      
+      sessions.forEach(session => {
+        const sessionBox = document.createElement('div');
+        sessionBox.className = `session-box ${session.active ? 'active' : ''}`;
+        sessionBox.textContent = session.id;
+        sessionBox.dataset.sessionId = session.id;
+        
+        // Add click handler for session switching
+        sessionBox.addEventListener('click', () => switchToSession(session.id));
+        
+        // Add right-click handler for meta-view
+        sessionBox.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          showMetaView(session.id);
+        });
+        
+        container.appendChild(sessionBox);
+      });
+    }
+
+    let currentContextSessionId = null;
+
+    // Show context menu
+    function showContextMenu(x, y, sessionId) {
+      currentContextSessionId = sessionId;
+      const contextMenu = document.getElementById('context-menu');
+      contextMenu.style.display = 'block';
+      
+      // Position menu centered horizontally, below the click point
+      contextMenu.style.left = '10px'; // Centered in 75px sidebar (with some margin)
+      contextMenu.style.top = (y + 10) + 'px'; // Slightly below the click
+    }
+
+    // Hide context menu
+    function hideContextMenu() {
+      document.getElementById('context-menu').style.display = 'none';
+      currentContextSessionId = null;
+    }
+
+    // Hide context menu when clicking elsewhere
+    document.addEventListener('click', hideContextMenu);
+
+    // Handle kill session
+    document.getElementById('kill-session').addEventListener('click', async () => {
+      if (currentContextSessionId) {
+        try {
+          const result = await ipcRenderer.invoke('kill-session', currentContextSessionId);
+          if (!result.success) {
+            alert(`Failed to kill session: ${result.error}`);
+          }
+        } catch (error) {
+          alert(`Error: ${error.message}`);
+        }
+      }
+      hideContextMenu();
+    });
+
+    // Handle kill others
+    document.getElementById('kill-others').addEventListener('click', async () => {
+      if (currentContextSessionId) {
+        try {
+          const result = await ipcRenderer.invoke('kill-others', currentContextSessionId);
+          if (result.success) {
+            console.log(`Killed ${result.killedCount} other sessions, kept session ${result.keptSessionId}`);
+          } else {
+            alert(`Failed to kill other sessions: ${result.error}`);
+          }
+        } catch (error) {
+          alert(`Error: ${error.message}`);
+        }
+      }
+      hideContextMenu();
+    });
+    
+    // Show meta-view for session
+    async function showMetaView(sessionId) {
+      try {
+        const result = await ipcRenderer.invoke('show-meta-view', sessionId);
+        if (!result.success) {
+          alert(`Failed to show meta-view: ${result.error}`);
+        }
+      } catch (error) {
+        alert(`Error: ${error.message}`);
+      }
+    }
     
     // Handle + button clicks
     document.getElementById('add-button').addEventListener('click', async () => {
