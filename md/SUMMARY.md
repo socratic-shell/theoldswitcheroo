@@ -24,6 +24,10 @@ Please read them as needed to get up to speed on particular topics.
 - [Complete Guide to Integrating openvscode-server with Electron](./references/complete-guide-to-integrating-openvscode-server-with-electron.md)
 
 
+<!-- This document provides comprehensive strategies for ensuring VSCode server processes terminate when SSH connections drop. Content includes: built-in VSCode flags, systemd user services with cgroup tracking, PAM session hooks, process supervision tools, container isolation, and TTY monitoring. Use this for: solving orphaned process issues, implementing reliable server cleanup, production deployment strategies, debugging process termination problems. -->
+- [Process termination strategies](./references/process-termination-strategies.md)
+
+
 <!-- This document provides comprehensive guidance for SSH ControlMaster connection multiplexing in Node.js applications. Content includes: performance benchmarks (99%+ speed improvement), complete implementation classes, socket management, security considerations, troubleshooting guides, and best practices. Use this for: optimizing SSH connection performance, implementing connection reuse, managing multiple SSH sessions efficiently, debugging connection issues. -->
 - [SSH ControlMaster](./references/ControlMaster-Report.md)
 
