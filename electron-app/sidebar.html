@@ -11,10 +11,18 @@
       height: 100vh;
       background: #2d2d30;
       overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      font-family: system-ui;
     }
 
-    .sidebar {
+    .sessions-container {
+      flex: 1;
       padding: 10px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
 
     .session-box {
@@ -27,19 +35,72 @@
       justify-content: center;
       color: white;
       font-weight: bold;
-      font-family: system-ui;
       cursor: pointer;
+      flex-shrink: 0;
     }
 
     .session-box.active {
       background: #40a6ff;
     }
+
+    .bottom-toolbar {
+      padding: 10px;
+      border-top: 1px solid #3e3e42;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .toolbar-button {
+      width: 40px;
+      height: 40px;
+      background: #3c3c3c;
+      border: none;
+      border-radius: 4px;
+      color: #cccccc;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+
+    .toolbar-button:hover {
+      background: #464647;
+    }
+
+    .add-button {
+      background: #007acc;
+    }
+
+    .add-button:hover {
+      background: #40a6ff;
+    }
+
+    /* Custom scrollbar */
+    .sessions-container::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .sessions-container::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .sessions-container::-webkit-scrollbar-thumb {
+      background: #464647;
+      border-radius: 2px;
+    }
   </style>
 </head>
 
 <body>
-  <div class="sidebar">
+  <div class="sessions-container">
     <div class="session-box active">1</div>
+  </div>
+  
+  <div class="bottom-toolbar">
+    <button class="toolbar-button" id="settings-button">⚙</button>
+    <button class="toolbar-button add-button" id="add-button">+</button>
   </div>
 </body>
 

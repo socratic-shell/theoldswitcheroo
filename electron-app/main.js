@@ -5,6 +5,22 @@ const os = require('os');
 const http = require('http');
 const { spawn } = require('child_process');
 
+// Global session management
+let sessions = [];
+let activeSessionId = null;
+
+// Session object structure
+function createSession(id, hostname, port, serverProcess) {
+  return {
+    id,
+    hostname,
+    port,
+    serverProcess,
+    host: 'localhost', // Always localhost due to port forwarding
+    createdAt: new Date()
+  };
+}
+
 // Get hostname from command line args
 function getHostname() {
   const args = process.argv.slice(2);
@@ -128,8 +144,8 @@ async function startVSCodeServerWithPortForwarding(hostname, port) {
 }
 
 // SSH connection and setup using system ssh
-async function setupRemoteServer(hostname) {
-  console.log('Setting up remote server...');
+async function setupRemoteServer(hostname, sessionId) {
+  console.log(`Setting up remote server for session ${sessionId}...`);
   
   // Test basic SSH connection first
   console.log('Testing SSH connection...');
@@ -151,14 +167,11 @@ async function setupRemoteServer(hostname) {
   await installVSCodeServer(hostname, arch);
   
   // Start server with port forwarding
-  const port = 8765;
-  console.log(`Starting VSCode server on port ${port}...`);
+  const port = 8765 + sessionId - 1; // Session 1 gets 8765, session 2 gets 8766, etc.
+  console.log(`Starting VSCode server on port ${port} for session ${sessionId}...`);
   const serverProcess = await startVSCodeServerWithPortForwarding(hostname, port);
   
-  // Store server process globally for cleanup
-  global.serverProcess = serverProcess;
-  
-  return { host: 'localhost', port };
+  return createSession(sessionId, hostname, port, serverProcess);
 }
 
 async function checkServerHealth(url, maxRetries = 10) {
@@ -197,10 +210,13 @@ async function checkServerHealth(url, maxRetries = 10) {
 async function createWindow() {
   const hostname = getHostname();
   
-  let sessionData;
+  // Create first session
+  let firstSession;
   try {
-    sessionData = await setupRemoteServer(hostname);
-    console.log('Remote server setup complete:', sessionData);
+    firstSession = await setupRemoteServer(hostname, 1);
+    sessions.push(firstSession);
+    activeSessionId = 1;
+    console.log('First session created:', firstSession);
   } catch (error) {
     console.error('Failed to setup remote server:', error.message);
     process.exit(1);
@@ -209,7 +225,7 @@ async function createWindow() {
   // Configure user agent to prevent Electron blocking
   const standardUserAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
-  const vscodeUrl = `http://${sessionData.host}:${sessionData.port}`;
+  const vscodeUrl = `http://${firstSession.host}:${firstSession.port}`;
   console.log('VSCode should be available at:', vscodeUrl);
 
   try {
@@ -303,10 +319,12 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  // Clean up server process
-  if (global.serverProcess) {
-    global.serverProcess.kill();
-  }
+  // Clean up all session processes
+  sessions.forEach(session => {
+    if (session.serverProcess) {
+      session.serverProcess.kill();
+    }
+  });
   
   if (process.platform !== 'darwin') {
     app.quit();
@@ -321,7 +339,9 @@ app.on('activate', () => {
 
 // Clean up on exit
 app.on('before-quit', () => {
-  if (global.serverProcess) {
-    global.serverProcess.kill();
-  }
+  sessions.forEach(session => {
+    if (session.serverProcess) {
+      session.serverProcess.kill();
+    }
+  });
 });
