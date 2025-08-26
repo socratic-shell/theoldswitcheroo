@@ -170,21 +170,14 @@ async function startVSCodeServerWithPortForwarding(hostname, sessionId) {
         --port 0 \\
         --without-connection-token \\
         --enable-remote-auto-shutdown \\
-        --connection-token-file="$TOKEN_FILE" &
+        --connection-token-file="$TOKEN_FILE" 2>&1 &
       
       SERVER_PID=$!
       
-      # Wait for server to start and get actual port
+      # Wait for VSCode to output its port
       sleep 3
       
-      # Find the actual port VSCode chose
-      ACTUAL_PORT=\$(netstat -tlnp 2>/dev/null | grep ":$SERVER_PID " | grep -o ':[0-9]*' | head -1 | cut -d: -f2)
-      if [ -z "$ACTUAL_PORT" ]; then
-        # Fallback: try to find any VSCode server port
-        ACTUAL_PORT=\$(netstat -tln | grep LISTEN | grep -E ':8[0-9]{3}' | head -1 | grep -o ':[0-9]*' | cut -d: -f2)
-      fi
-      
-      echo "VSCode server started on port: $ACTUAL_PORT"
+      echo "VSCode server started, checking logs for port..."
       
       # Keep script alive - signal traps handle cleanup
       while true; do 
@@ -208,9 +201,14 @@ async function startVSCodeServerWithPortForwarding(hostname, sessionId) {
       const output = data.toString();
       console.log(`[VSCode Server ${sessionId}] ${output.trim()}`);
       
-      // Look for port announcement
-      const portMatch = output.match(/VSCode server started on port: (\d+)/);
-      if (portMatch) {
+      // Look for VSCode's port announcement in its output
+      // VSCode typically outputs: "Web UI available at http://localhost:XXXX"
+      const portMatch = output.match(/Web UI available at.*:(\d+)/i) || 
+                       output.match(/localhost:(\d+)/) ||
+                       output.match(/127\.0\.0\.1:(\d+)/) ||
+                       output.match(/0\.0\.0\.0:(\d+)/);
+      
+      if (portMatch && !actualPort) {
         actualPort = parseInt(portMatch[1]);
         console.log(`✓ VSCode server ${sessionId} ready on port ${actualPort}`);
         
@@ -225,12 +223,6 @@ async function startVSCodeServerWithPortForwarding(hostname, sessionId) {
         ]);
         
         resolve({ serverProcess: ssh, forwardProcess: forwardSsh, port: actualPort });
-      }
-      
-      // Look for server ready indication (fallback)
-      if (output.includes('Web UI available at') && !actualPort) {
-        console.log(`✓ VSCode server ${sessionId} is ready (port detection failed, using fallback)`);
-        resolve({ serverProcess: ssh, port: 8765 + sessionId - 1 }); // Fallback to old logic
       }
     });
     
