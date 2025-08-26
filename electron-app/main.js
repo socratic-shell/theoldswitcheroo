@@ -121,8 +121,8 @@ async function createWindow() {
 
   console.log('Loading VSCode from:', vscodeUrl);
 
-  // Load simple sidebar content programmatically instead of HTML file
-  sidebarView.webContents.loadURL('data:text/html,<html><head><style>body{margin:0;padding:10px;background:#2d2d30;color:white;font-family:sans-serif;text-align:center;}</style></head><body><div style="width:40px;height:40px;background:#007acc;border-radius:4px;display:flex;align-items:center;justify-content:center;font-weight:bold;">1</div></body></html>');
+  // Load the session management UI in sidebar
+  sidebarView.webContents.loadFile('index.html');
 
   // Load VSCode in the main view (server is now confirmed ready)
   console.log('About to load VSCode URL in webview...');
