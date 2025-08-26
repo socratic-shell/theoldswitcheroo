@@ -11,91 +11,67 @@ let activeSessionId = null;
 let currentHostname = null;
 let mainWindow = null;
 let sidebarView = null;
-let splashWindow = null;
 
-// Create splash screen
-function createSplashScreen() {
-  splashWindow = new BaseWindow({
-    width: 500,
-    height: 400,
-    show: false,
-    frame: false,
-    backgroundColor: '#1e1e1e',
-    center: true,
-    resizable: false
-  });
+class SplashScreen {
+  constructor() {
+    this.splashWindow = new BaseWindow({
+      width: 500,
+      height: 400,
+      show: false,
+      frame: false,
+      backgroundColor: '#1e1e1e',
+      center: true,
+      resizable: false
+    });
 
-  const splashView = new WebContentsView({
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false
-    }
-  });
+    this.splashView = new WebContentsView({
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false
+      }
+    });
 
-  splashWindow.contentView.addChildView(splashView);
-  splashView.setBounds({ x: 0, y: 0, width: 500, height: 400 });
-  
-  splashView.webContents.loadFile('splash.html');
-  
-  splashView.webContents.once('did-finish-load', () => {
-    splashWindow.show();
-  });
-  
-  return splashView.webContents;
-}
+    this.splashWindow.contentView.addChildView(this.splashView);
+    this.splashView.setBounds({ x: 0, y: 0, width: 500, height: 400 });
 
-// Update splash screen status
-function updateSplashStatus(message) {
-  if (splashWindow && !splashWindow.isDestroyed() && splashWindow.webContents) {
-    splashWindow.webContents.send('splash-status', message);
+    this.splashView.webContents.loadFile('splash.html');
+
+    this.splashView.webContents.once('did-finish-load', () => {
+      this.splashWindow.show();
+    });
   }
-}
 
-// Update splash screen hostname
-function updateSplashHostname(hostname) {
-  if (splashWindow && !splashWindow.isDestroyed() && splashWindow.webContents) {
-    splashWindow.webContents.send('splash-hostname', hostname);
+  get webContents() {
+    return this.splashView.webContents;
   }
-}
 
-// Update splash screen sessions
-function updateSplashSessions(sessionList) {
-  if (splashWindow && !splashWindow.isDestroyed() && splashWindow.webContents) {
-    splashWindow.webContents.send('splash-sessions', sessionList);
+  updateHostname(hostname) {
+    this.webContents.postMessage('splash-hostname', hostname);
   }
-}
 
-// Add log message to splash screen
-function addSplashLog(message) {
-  if (splashWindow && !splashWindow.isDestroyed() && splashWindow.webContents) {
-    splashWindow.webContents.send('splash-log', message);
+  updateSessions(hostname) {
+    this.webContents.postMessage('splash-sessions', hostname);
   }
-}
 
-// Hide splash screen spinner
-function hideSplashSpinner() {
-  if (splashWindow && !splashWindow.isDestroyed() && splashWindow.webContents) {
-    splashWindow.webContents.send('splash-hide-spinner');
+  log(message) {
+    console.log(message);
+    this.webContents.postMessage('splash-log', message);
   }
-}
 
-// Close splash screen
-function closeSplashScreen() {
-  if (splashWindow && !splashWindow.isDestroyed()) {
-    splashWindow.close();
-    splashWindow = null;
+  close() {
+    this.splashWindow.close();
   }
 }
 
 // Function to update view bounds based on window size
 function updateViewBounds() {
   if (!mainWindow) return;
-  
+
   const bounds = mainWindow.getBounds();
   const sidebarWidth = 75;
-  
+
   sidebarView.setBounds({ x: 0, y: 0, width: sidebarWidth, height: bounds.height });
-  
+
   // Update bounds for active session's view
   const activeSession = sessions.find(s => s.id === activeSessionId);
   if (activeSession && activeSession.vscodeView) {
@@ -122,9 +98,9 @@ async function switchToSession(sessionId) {
   if (!session) {
     throw new Error(`Session ${sessionId} not found`);
   }
-  
+
   console.log(`Switching to session ${sessionId} on port ${session.port}`);
-  
+
   // Create VSCode view for this session if it doesn't exist
   if (!session.vscodeView) {
     session.vscodeView = new WebContentsView({
@@ -133,27 +109,27 @@ async function switchToSession(sessionId) {
         contextIsolation: true
       }
     });
-    
+
     // Wait for server to be ready
     const vscodeUrl = `http://${session.host}:${session.port}`;
     await checkServerHealth(vscodeUrl);
-    
+
     // Load VSCode in the view
     await session.vscodeView.webContents.loadURL(vscodeUrl);
   }
-  
+
   // Remove current VSCode view if any
   const currentSession = sessions.find(s => s.id === activeSessionId);
   if (currentSession && currentSession.vscodeView) {
     mainWindow.contentView.removeChildView(currentSession.vscodeView);
   }
-  
+
   // Add the new session's view
   mainWindow.contentView.addChildView(session.vscodeView);
-  
+
   // Update bounds
   updateViewBounds();
-  
+
   console.log(`✓ Switched to session ${sessionId}`);
 }
 
@@ -161,7 +137,7 @@ async function switchToSession(sessionId) {
 async function createNewSession(hostname) {
   const nextSessionId = sessions.length + 1;
   console.log(`Creating session ${nextSessionId}...`);
-  
+
   try {
     const newSession = await setupRemoteServer(hostname, nextSessionId);
     sessions.push(newSession);
@@ -176,32 +152,32 @@ async function createNewSession(hostname) {
 // IPC handlers
 ipcMain.handle('create-session', async () => {
   console.log('+ button clicked! Creating new session...');
-  
+
   try {
     const newSession = await createNewSession(currentHostname);
-    return { 
-      success: true, 
+    return {
+      success: true,
       session: {
         id: newSession.id,
         port: newSession.port
       }
     };
   } catch (error) {
-    return { 
-      success: false, 
-      error: error.message 
+    return {
+      success: false,
+      error: error.message
     };
   }
 });
 
 ipcMain.handle('switch-session', async (event, sessionId) => {
   console.log(`Switching to session ${sessionId}`);
-  
+
   const session = sessions.find(s => s.id === sessionId);
   if (!session) {
     return { success: false, error: `Session ${sessionId} not found` };
   }
-  
+
   try {
     await switchToSession(sessionId);
     activeSessionId = sessionId;
@@ -230,23 +206,23 @@ async function execSSHCommand(hostname, command) {
       '-o', 'ControlMaster=auto',
       '-o', `ControlPath=~/.ssh/cm-${hostname}`,
       '-o', 'ControlPersist=10m',
-      hostname, 
+      hostname,
       command
     ], {
       stdio: ['pipe', 'pipe', 'pipe']
     });
-    
+
     let stdout = '';
     let stderr = '';
-    
+
     ssh.stdout.on('data', (data) => {
       stdout += data.toString();
     });
-    
+
     ssh.stderr.on('data', (data) => {
       stderr += data.toString();
     });
-    
+
     ssh.on('close', (code) => {
       if (code === 0) {
         resolve(stdout.trim());
@@ -274,7 +250,7 @@ function mapArchitecture(arch) {
 // Install VSCode server
 async function installVSCodeServer(hostname, arch) {
   console.log(`Installing openvscode-server for ${arch}...`);
-  
+
   const installScript = `
     cd ~/.socratic-shell/theoldswitcheroo/
     if [ ! -f openvscode-server.tar.gz ]; then
@@ -286,7 +262,7 @@ async function installVSCodeServer(hostname, arch) {
       chmod +x openvscode-server/bin/openvscode-server
     fi
   `;
-  
+
   await execSSHCommand(hostname, installScript);
   console.log('✓ VSCode server installation complete');
 }
@@ -295,7 +271,7 @@ async function installVSCodeServer(hostname, arch) {
 async function startVSCodeServerWithPortForwarding(hostname, sessionId) {
   return new Promise((resolve, reject) => {
     console.log(`Starting SSH with port forwarding for session ${sessionId}...`);
-    
+
     // Simple server script with auto-shutdown
     const serverScript = `
       cd ~/.socratic-shell/theoldswitcheroo/
@@ -307,7 +283,7 @@ async function startVSCodeServerWithPortForwarding(hostname, sessionId) {
         --without-connection-token \\
         --enable-remote-auto-shutdown 2>&1
     `;
-    
+
     const ssh = spawn('ssh', [
       '-o', 'ControlMaster=auto',
       '-o', `ControlPath=~/.ssh/cm-${hostname}`,
@@ -317,24 +293,24 @@ async function startVSCodeServerWithPortForwarding(hostname, sessionId) {
     ], {
       stdio: ['pipe', 'pipe', 'pipe']
     });
-    
+
     let actualPort = null;
-    
+
     ssh.stdout.on('data', (data) => {
       const output = data.toString();
       console.log(`[VSCode Server ${sessionId}] ${output.trim()}`);
-      
+
       // Look for VSCode's port announcement in its output
       // VSCode typically outputs: "Web UI available at http://localhost:XXXX"
-      const portMatch = output.match(/Web UI available at.*:(\d+)/i) || 
-                       output.match(/localhost:(\d+)/) ||
-                       output.match(/127\.0\.0\.1:(\d+)/) ||
-                       output.match(/0\.0\.0\.0:(\d+)/);
-      
+      const portMatch = output.match(/Web UI available at.*:(\d+)/i) ||
+        output.match(/localhost:(\d+)/) ||
+        output.match(/127\.0\.0\.1:(\d+)/) ||
+        output.match(/0\.0\.0\.0:(\d+)/);
+
       if (portMatch && !actualPort) {
         actualPort = parseInt(portMatch[1]);
         console.log(`✓ VSCode server ${sessionId} ready on port ${actualPort}`);
-        
+
         // Now set up port forwarding for the actual port
         const forwardSsh = spawn('ssh', [
           '-o', 'ControlMaster=auto',
@@ -344,24 +320,24 @@ async function startVSCodeServerWithPortForwarding(hostname, sessionId) {
           '-N',
           hostname
         ]);
-        
+
         resolve({ serverProcess: ssh, forwardProcess: forwardSsh, port: actualPort });
       }
     });
-    
+
     ssh.stderr.on('data', (data) => {
       const output = data.toString().trim();
       console.error(`[VSCode Server ${sessionId} Error] ${output}`);
     });
-    
+
     ssh.on('close', (code) => {
       console.log(`SSH process for session ${sessionId} exited with code ${code}`);
     });
-    
+
     ssh.on('error', (err) => {
       reject(new Error(`Failed to start SSH: ${err.message}`));
     });
-    
+
     // Timeout if server doesn't start
     setTimeout(() => {
       if (!actualPort) {
@@ -372,42 +348,35 @@ async function startVSCodeServerWithPortForwarding(hostname, sessionId) {
 }
 
 // SSH connection and setup using system ssh
-async function setupRemoteServer(hostname, sessionId) {
-  console.log(`Setting up remote server for session ${sessionId}...`);
-  
+async function setupRemoteServer(splash, hostname, sessionId) {
+  splash.log(`Setting up remote server for session ${sessionId}...`);
+
   // Test basic SSH connection first
-  console.log('Testing SSH connection...');
-  addSplashLog('Testing SSH connection...');
+  splash.log('Testing SSH connection...');
   await execSSHCommand(hostname, 'echo "SSH connection successful"');
-  console.log('✓ SSH connection test successful');
-  addSplashLog('✓ SSH connection test successful');
-  
+  splash.log('✓ SSH connection test successful');
+
   // Detect architecture
-  console.log('Detecting remote architecture...');
-  addSplashLog('Detecting remote architecture...');
+  splash.log('Detecting remote architecture...');
   const archOutput = await execSSHCommand(hostname, 'uname -m');
   const arch = mapArchitecture(archOutput.toLowerCase());
-  console.log(`✓ Detected architecture: ${archOutput} -> ${arch}`);
-  addSplashLog(`✓ Detected architecture: ${archOutput} -> ${arch}`);
-  
+  splash.log(`✓ Detected architecture: ${archOutput} -> ${arch}`);
+
   // Setup remote directory
-  console.log('Setting up remote directory...');
-  addSplashLog('Setting up remote directory...');
+  splash.log('Setting up remote directory...');
   await execSSHCommand(hostname, 'mkdir -p ~/.socratic-shell/theoldswitcheroo/');
-  console.log('✓ Remote directory ready');
-  addSplashLog('✓ Remote directory ready');
-  
+  splash.log('✓ Remote directory ready');
+
   // Install VSCode server
-  addSplashLog('Installing VSCode server...');
+  splash.log('Installing VSCode server...');
   await installVSCodeServer(hostname, arch);
-  addSplashLog('✓ VSCode server installation complete');
-  
+  splash.log('✓ VSCode server installation complete');
+
   // Start server with dynamic port selection
-  console.log(`Starting VSCode server for session ${sessionId}...`);
-  addSplashLog(`Starting VSCode server for session ${sessionId}...`);
+  splash.log(`Starting VSCode server for session ${sessionId}...`);
   const serverInfo = await startVSCodeServerWithPortForwarding(hostname, sessionId);
-  addSplashLog(`✓ VSCode server ${sessionId} ready on port ${serverInfo.port}`);
-  
+  splash.log(`✓ VSCode server ${sessionId} ready on port ${serverInfo.port}`);
+
   return createSession(sessionId, hostname, serverInfo.port, serverInfo.serverProcess);
 }
 
@@ -447,56 +416,56 @@ async function checkServerHealth(url, maxRetries = 10) {
 async function createWindow() {
   const hostname = getHostname();
   currentHostname = hostname; // Store globally for IPC access
-  
+
   if (!hostname) {
     console.error('No hostname provided');
     app.quit();
     return;
   }
-  
+
   // Create and show splash screen
-  const splashWebContents = createSplashScreen();
-  
+  let splash = new SplashScreen();
+
   // Wait for splash to load before updating it
   await new Promise(resolve => {
-    splashWebContents.once('did-finish-load', resolve);
+    splash.webContents.once('did-finish-load', resolve);
   });
-  
-  updateSplashHostname(hostname);
-  
+
+  splash.updateHostname(hostname);
+
   // TODO: Load existing sessions here
-  updateSplashStatus('Checking for existing sessions...');
-  
+  splash.log('Checking for existing sessions...');
+
   // For now, create first session (will be replaced with session loading logic)
-  updateSplashStatus('No existing sessions found, creating first session...');
-  updateSplashSessions([{
+  splash.log('No existing sessions found, creating first session...');
+  splash.updateSessions([{
     id: 1,
     status: 'connecting',
     message: 'Starting VSCode server...'
   }]);
-  
+
   // Create first session
   let firstSession;
   try {
-    firstSession = await setupRemoteServer(hostname, 1);
+    firstSession = await setupRemoteServer(splash, hostname, 1);
     sessions.push(firstSession);
     activeSessionId = 1;
     console.log('First session created:', firstSession);
-    
-    updateSplashSessions([{
+
+    splash.updateSessions([{
       id: 1,
       status: 'connected',
       message: 'Connected'
     }]);
-    
+
   } catch (error) {
     console.error('Failed to setup remote server:', error.message);
-    updateSplashSessions([{
+    splash.updateSessions([{
       id: 1,
       status: 'error',
       message: `Failed: ${error.message}`
     }]);
-    
+
     // Wait a moment to show error, then quit
     setTimeout(() => {
       app.quit();
@@ -504,8 +473,7 @@ async function createWindow() {
     return;
   }
 
-  updateSplashStatus('Setting up interface...');
-  hideSplashSpinner();
+  splash.log('Setting up interface...');
 
   // Configure user agent to prevent Electron blocking
   const standardUserAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
@@ -593,9 +561,8 @@ async function createWindow() {
   firstSession.vscodeView.webContents.on('did-finish-load', () => {
     console.log('VSCode webview finished loading');
     // Close splash and show main window
-    updateSplashStatus('Ready!');
     setTimeout(() => {
-      closeSplashScreen();
+      splash.close();
       mainWindow.show();
     }, 500);
   });
@@ -603,7 +570,7 @@ async function createWindow() {
   firstSession.vscodeView.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
     console.log('VSCode webview failed to load:', errorCode, errorDescription);
     // Close splash and show window anyway so user can see the error
-    closeSplashScreen();
+    splash.close();
     mainWindow.show();
   });
 }
@@ -619,7 +586,7 @@ app.on('window-all-closed', () => {
       session.serverProcess.kill();
     }
   });
-  
+
   if (process.platform !== 'darwin') {
     app.quit();
   }

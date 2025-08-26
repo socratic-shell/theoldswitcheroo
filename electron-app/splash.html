@@ -136,9 +136,12 @@
         
         let logMessages = [];
         const maxMessages = 5;
-        
+
+        console.log("XXXX");
+
         // Update hostname
         ipcRenderer.on('splash-hostname', (event, hostname) => {
+            console.log("SPLASH HOSTNAME");
             document.getElementById('hostname').textContent = hostname;
         });
         
