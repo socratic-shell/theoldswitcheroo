@@ -8,6 +8,7 @@ const { spawn } = require('child_process');
 // Global session management
 let sessions = [];
 let activeSessionId = null;
+let currentHostname = null;
 
 // Session object structure
 function createSession(id, hostname, port, serverProcess) {
@@ -21,10 +22,41 @@ function createSession(id, hostname, port, serverProcess) {
   };
 }
 
+// Create new session
+async function createNewSession(hostname) {
+  const nextSessionId = sessions.length + 1;
+  console.log(`Creating session ${nextSessionId}...`);
+  
+  try {
+    const newSession = await setupRemoteServer(hostname, nextSessionId);
+    sessions.push(newSession);
+    console.log(`Session ${nextSessionId} created successfully`);
+    return newSession;
+  } catch (error) {
+    console.error(`Failed to create session ${nextSessionId}:`, error.message);
+    throw error;
+  }
+}
+
 // IPC handlers
 ipcMain.handle('create-session', async () => {
   console.log('+ button clicked! Creating new session...');
-  return { success: true, message: 'Session creation requested' };
+  
+  try {
+    const newSession = await createNewSession(currentHostname);
+    return { 
+      success: true, 
+      session: {
+        id: newSession.id,
+        port: newSession.port
+      }
+    };
+  } catch (error) {
+    return { 
+      success: false, 
+      error: error.message 
+    };
+  }
 });
 
 // Get hostname from command line args
@@ -266,6 +298,7 @@ async function checkServerHealth(url, maxRetries = 10) {
 
 async function createWindow() {
   const hostname = getHostname();
+  currentHostname = hostname; // Store globally for IPC access
   
   if (!hostname) {
     console.error('No hostname provided');

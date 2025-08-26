@@ -108,11 +108,36 @@
     
     document.getElementById('add-button').addEventListener('click', async () => {
       console.log('+ button clicked in sidebar');
+      
+      // Disable button during creation
+      const addButton = document.getElementById('add-button');
+      addButton.disabled = true;
+      addButton.textContent = '...';
+      
       try {
         const result = await ipcRenderer.invoke('create-session');
         console.log('IPC result:', result);
+        
+        if (result.success) {
+          // Add new session box to UI
+          const sessionsContainer = document.querySelector('.sessions-container');
+          const newSessionBox = document.createElement('div');
+          newSessionBox.className = 'session-box';
+          newSessionBox.textContent = result.session.id;
+          sessionsContainer.appendChild(newSessionBox);
+          
+          console.log(`Added session ${result.session.id} to UI`);
+        } else {
+          console.error('Session creation failed:', result.error);
+          alert(`Failed to create session: ${result.error}`);
+        }
       } catch (error) {
         console.error('IPC error:', error);
+        alert(`Error: ${error.message}`);
+      } finally {
+        // Re-enable button
+        addButton.disabled = false;
+        addButton.textContent = '+';
       }
     });
   </script>
