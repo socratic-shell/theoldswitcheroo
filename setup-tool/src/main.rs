@@ -43,10 +43,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Installing openvscode-server...");
     let install_script = r#"
         cd ~/.socratic-shell/theoldswitcheroo/
-        curl -L https://github.com/gitpod-io/openvscode-server/releases/download/openvscode-server-v1.103.1/openvscode-server-v1.103.1-linux-x64.tar.gz -o openvscode-server.tar.gz
-        tar -xzf openvscode-server.tar.gz
-        mv openvscode-server-v1.103.1-linux-x64 openvscode-server
-        chmod +x openvscode-server/bin/openvscode-server
+        if [ ! -f openvscode-server.tar.gz ]; then
+            curl -L https://github.com/gitpod-io/openvscode-server/releases/download/openvscode-server-v1.103.1/openvscode-server-v1.103.1-linux-x64.tar.gz -o openvscode-server.tar.gz
+        fi
+        if [ ! -d openvscode-server ]; then
+            tar -xzf openvscode-server.tar.gz
+            mv openvscode-server-v1.103.1-linux-x64 openvscode-server
+            chmod +x openvscode-server/bin/openvscode-server
+        fi
     "#;
     
     let output = Command::new("ssh")
