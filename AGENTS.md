@@ -12,7 +12,7 @@
 
 # checkpointing and github tracking issues
 
-Track work using github tracking issues as [described here](./.socratic-shell/github-tracking-issues.md).
+Track work using github tracking issues as [described here](./.socratic-shell/github-tracking-issues.md). Use the `gh` CLI to interact with github, it's the most reliable.
 
 Create them on the `socratic-shell/theoldswitcheroo` repository.
 
