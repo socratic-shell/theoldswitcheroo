@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      width: 60px;
+      height: 100vh;
+      background: #2d2d30;
+      overflow: hidden;
+    }
+
+    .sidebar {
+      padding: 10px;
+    }
+
+    .session-box {
+      width: 40px;
+      height: 40px;
+      background: #007acc;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      font-family: system-ui;
+      cursor: pointer;
+    }
+
+    .session-box.active {
+      background: #40a6ff;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="sidebar">
+    <div class="session-box active">1</div>
+  </div>
+</body>
+
+</html>

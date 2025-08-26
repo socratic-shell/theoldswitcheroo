@@ -6,7 +6,7 @@ const http = require('http');
 
 function readSessionFile() {
   const sessionFile = path.join(os.homedir(), '.socratic-shell', 'theoldswitcheroo', 'session.json');
-  
+
   try {
     const data = fs.readFileSync(sessionFile, 'utf8');
     return JSON.parse(data);
@@ -22,14 +22,14 @@ async function checkServerHealth(url, maxRetries = 10) {
         const req = http.get(url, (res) => {
           resolve(res);
         });
-        
+
         req.on('error', reject);
         req.setTimeout(2000, () => {
           req.destroy();
           reject(new Error('Timeout'));
         });
       });
-      
+
       if (response.statusCode === 200) {
         console.log('✓ Server is ready');
         return true;
@@ -37,14 +37,14 @@ async function checkServerHealth(url, maxRetries = 10) {
     } catch (error) {
       // Continue to retry
     }
-    
+
     if (retries < maxRetries - 1) {
       const delay = Math.min(1000 * Math.pow(2, retries), 5000);
       console.log(`Server not ready, retrying in ${delay}ms... (${retries + 1}/${maxRetries})`);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
-  
+
   throw new Error(`Server not ready after ${maxRetries} attempts`);
 }
 
@@ -57,6 +57,10 @@ async function createWindow() {
     console.error(error.message);
     process.exit(1);
   }
+
+
+  // Configure user agent to prevent Electron blocking
+  const standardUserAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
   const vscodeUrl = `http://${sessionData.host}:${sessionData.port}`;
   console.log('Checking server health at:', vscodeUrl);
@@ -72,7 +76,8 @@ async function createWindow() {
   const mainWindow = new BaseWindow({
     width: 1200,
     height: 800,
-    show: false // Don't show until views are properly set up
+    show: false, // Don't show until views are properly set up
+    backgroundColor: '#1e1e1e',
   });
 
   // Create sidebar view for session management
@@ -82,10 +87,12 @@ async function createWindow() {
       contextIsolation: true
     }
   });
+  sidebarView.setBackgroundColor('#2d2d30'); // CRITICAL - prevents garbage pixels
+  sidebarView.webContents.setUserAgent(standardUserAgent); // Use same UA as VSCode view
 
   // Create persistent session for VSCode
   const vscodeSession = session.fromPartition('persist:vscode-session');
-  
+
   // Configure session for VSCode compatibility
   vscodeSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
@@ -106,9 +113,7 @@ async function createWindow() {
       allowRunningInsecureContent: true
     }
   });
-
-  // Configure user agent to prevent Electron blocking
-  const standardUserAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+  vscodeView.setBackgroundColor('#2d2d30');
   vscodeView.webContents.setUserAgent(standardUserAgent);
 
   // Add views to the window
@@ -122,7 +127,7 @@ async function createWindow() {
   console.log('Loading VSCode from:', vscodeUrl);
 
   // Load the session management UI in sidebar
-  sidebarView.webContents.loadFile('index.html');
+  sidebarView.webContents.loadFile('sidebar.html');
 
   // Load VSCode in the main view (server is now confirmed ready)
   console.log('About to load VSCode URL in webview...');
@@ -144,9 +149,6 @@ async function createWindow() {
     // Show window anyway so user can see the error
     mainWindow.show();
   });
-
-  // Enable dev tools for debugging
-  sidebarView.webContents.openDevTools();
 }
 
 app.whenReady().then(() => {
