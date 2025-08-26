@@ -26,6 +26,8 @@ function getHostname() {
   const args = process.argv.slice(2);
   if (args.length === 0) {
     console.error('Usage: electron main.js <hostname>');
+    console.error('Example: electron main.js myserver.com');
+    app.quit();
     process.exit(1);
   }
   return args[0];
@@ -259,6 +261,12 @@ async function checkServerHealth(url, maxRetries = 10) {
 async function createWindow() {
   const hostname = getHostname();
   
+  if (!hostname) {
+    console.error('No hostname provided');
+    app.quit();
+    return;
+  }
+  
   // Create first session
   let firstSession;
   try {
@@ -268,7 +276,8 @@ async function createWindow() {
     console.log('First session created:', firstSession);
   } catch (error) {
     console.error('Failed to setup remote server:', error.message);
-    process.exit(1);
+    app.quit();
+    return;
   }
 
   // Configure user agent to prevent Electron blocking
@@ -282,7 +291,8 @@ async function createWindow() {
     await checkServerHealth(vscodeUrl);
   } catch (error) {
     console.error('Server health check failed:', error.message);
-    process.exit(1);
+    app.quit();
+    return;
   }
 
   const mainWindow = new BaseWindow({
