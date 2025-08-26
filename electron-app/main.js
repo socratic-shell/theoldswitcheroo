@@ -98,9 +98,24 @@ async function startVSCodeServerWithPortForwarding(hostname, port) {
   return new Promise((resolve, reject) => {
     console.log(`Starting SSH with port forwarding: localhost:${port} -> ${hostname}:${port}`);
     
+    // Wrapper script that monitors parent and cleans up server on disconnect
     const serverScript = `
       cd ~/.socratic-shell/theoldswitcheroo/
-      ./openvscode-server/bin/openvscode-server --host 0.0.0.0 --port ${port} --without-connection-token
+      ./openvscode-server/bin/openvscode-server --host 0.0.0.0 --port ${port} --without-connection-token &
+      SERVER_PID=$!
+      
+      # Wait a moment for server to start or fail
+      sleep 2
+      
+      # Check if server process is still running
+      if ! kill -0 $SERVER_PID 2>/dev/null; then
+        echo "ERROR: openvscode-server failed to start"
+        exit 1
+      fi
+      
+      # Monitor parent process and cleanup on exit
+      while kill -0 $PPID 2>/dev/null; do sleep 1; done
+      kill $SERVER_PID 2>/dev/null
     `;
     
     const ssh = spawn('ssh', [
@@ -113,21 +128,27 @@ async function startVSCodeServerWithPortForwarding(hostname, port) {
     
     ssh.stdout.on('data', (data) => {
       const output = data.toString();
-      console.log(`[VSCode Server] ${output.trim()}`);
+      console.log(`[VSCode Server ${port}] ${output.trim()}`);
       
       // Look for server ready indication
       if (output.includes('Web UI available at')) {
-        console.log('✓ VSCode server is ready');
+        console.log(`✓ VSCode server is ready on port ${port}`);
         resolve(ssh);
       }
     });
     
     ssh.stderr.on('data', (data) => {
-      console.error(`[VSCode Server Error] ${data.toString().trim()}`);
+      const output = data.toString().trim();
+      console.error(`[VSCode Server ${port} Error] ${output}`);
+      
+      // Check for startup failure
+      if (output.includes('ERROR: openvscode-server failed to start')) {
+        reject(new Error(`VSCode server failed to start on port ${port}`));
+      }
     });
     
     ssh.on('close', (code) => {
-      console.log(`SSH process exited with code ${code}`);
+      console.log(`SSH process for port ${port} exited with code ${code}`);
     });
     
     ssh.on('error', (err) => {
@@ -137,7 +158,7 @@ async function startVSCodeServerWithPortForwarding(hostname, port) {
     // Timeout if server doesn't start
     setTimeout(() => {
       if (!ssh.killed) {
-        reject(new Error('VSCode server startup timeout'));
+        reject(new Error(`VSCode server startup timeout on port ${port}`));
       }
     }, 60000); // 60 second timeout
   });
