@@ -12,6 +12,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 struct Args {
     #[arg(long)]
     host: String,
+    
+    #[arg(long, default_value = "linux-x64")]
+    #[arg(help = "Target architecture: linux-x64, linux-arm64")]
+    arch: String,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -56,18 +60,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     
     // Download and install openvscode-server with streaming output
-    println!("Installing openvscode-server...");
-    let install_script = r#"
+    println!("Installing openvscode-server for {}...", args.arch);
+    let install_script = format!(r#"
         cd ~/.socratic-shell/theoldswitcheroo/
         if [ ! -f openvscode-server.tar.gz ]; then
-            curl -L https://github.com/gitpod-io/openvscode-server/releases/download/openvscode-server-v1.103.1/openvscode-server-v1.103.1-linux-x64.tar.gz -o openvscode-server.tar.gz
+            curl -L https://github.com/gitpod-io/openvscode-server/releases/download/openvscode-server-v1.103.1/openvscode-server-v1.103.1-{}.tar.gz -o openvscode-server.tar.gz
         fi
         if [ ! -d openvscode-server ]; then
             tar -xzf openvscode-server.tar.gz
-            mv openvscode-server-v1.103.1-linux-x64 openvscode-server
+            mv openvscode-server-v1.103.1-{} openvscode-server
             chmod +x openvscode-server/bin/openvscode-server
         fi
-    "#;
+    "#, args.arch, args.arch);
     
     let mut install_child = Command::new("ssh")
         .arg(&args.host)
