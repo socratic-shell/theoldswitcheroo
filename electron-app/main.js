@@ -323,7 +323,7 @@ async function createWindow() {
   // Function to update view bounds based on window size
   function updateViewBounds() {
     const bounds = mainWindow.getBounds();
-    const sidebarWidth = 60;
+    const sidebarWidth = 75;
     
     sidebarView.setBounds({ x: 0, y: 0, width: sidebarWidth, height: bounds.height });
     vscodeView.setBounds({ x: sidebarWidth, y: 0, width: bounds.width - sidebarWidth, height: bounds.height });
