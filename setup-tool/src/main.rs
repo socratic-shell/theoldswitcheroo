@@ -86,22 +86,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     install_child.wait()?;
     
-    println!("Starting server on port 3000...");
+    println!("Starting server on port 8765...");
     
     // Write session file (always localhost since we're port forwarding)
-    write_session_file("localhost", 3000)?;
+    write_session_file("localhost", 8765)?;
     
     // Start server with parent monitoring wrapper and stream logs
     let wrapper_script = r#"
         cd ~/.socratic-shell/theoldswitcheroo/
-        ./openvscode-server/bin/openvscode-server --host 0.0.0.0 --port 3000 --without-connection-token &
+        ./openvscode-server/bin/openvscode-server --host 0.0.0.0 --port 8765 --without-connection-token &
         SERVER_PID=$!
         while kill -0 $PPID 2>/dev/null; do sleep 1; done
         kill $SERVER_PID 2>/dev/null
     "#;
     
     println!("✓ Connection established.");
-    println!("  VSCode available at: http://localhost:3000 (forwarded from {}:3000)", args.host);
+    println!("  VSCode available at: http://localhost:8765 (forwarded from {}:8765)", args.host);
     println!("  ");
     println!("  Press Ctrl+C to shutdown and cleanup.");
     println!("");
@@ -109,7 +109,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Stream server logs with port forwarding
     let mut server_child = Command::new("ssh")
         .arg("-L")
-        .arg("3000:localhost:3000")
+        .arg("8765:localhost:8765")
         .arg(&args.host)
         .arg(wrapper_script)
         .stdout(Stdio::piped())
