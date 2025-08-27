@@ -3,11 +3,16 @@
   "displayName": "The Old Switcheroo",
   "description": "VSCode multiplexer extension",
   "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/socratic-shell/theoldswitcheroo.git"
+  },
+  "license": "Apache-2.0 OR MIT",
   "engines": {
     "vscode": "^1.74.0"
   },
   "categories": ["Other"],
-  "activationEvents": [],
+  "activationEvents": ["*"],
   "main": "./extension.js",
   "contributes": {
     "commands": [

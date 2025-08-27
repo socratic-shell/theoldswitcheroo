@@ -11,8 +11,8 @@ if ! command -v vsce &> /dev/null; then
     npm install -g vsce
 fi
 
-# Package the extension
-vsce package
+# Package the extension with flags to bypass warnings we've addressed
+vsce package --allow-star-activation
 
 echo "Extension built successfully!"
 echo "Output: theoldswitcheroo-extension-0.0.1.vsix"

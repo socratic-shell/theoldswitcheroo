@@ -71,11 +71,15 @@ class PortalPaths {
 // Helper to read project extensions
 function readProjectExtensions(): Extensions {
   const projectName = 'theoldswitcheroo';
-  const projectDir = path.join(LOCAL_DATA_DIR, 'projects', projectName);
+  // Use the development directory, not the data directory
+  const projectDir = path.join(__dirname, '..', 'projects', projectName);
   const extensionsFile = path.join(projectDir, 'vscode-extensions.json');
 
+  console.log(`DEBUG: readProjectExtensions - extensionsFile: ${extensionsFile}`);
+  console.log(`DEBUG: readProjectExtensions - file exists: ${fs.existsSync(extensionsFile)}`);
+
   // Always include the built-in theoldswitcheroo extension
-  const builtinExtension = '../../extensions/theoldswitcheroo-extension/theoldswitcheroo-extension-0.0.1.vsix';
+  const builtinExtension = 'theoldswitcheroo-extension-0.0.1.vsix';
   let extensions: Extensions = {
     marketplace: [],
     local: [builtinExtension]
@@ -84,6 +88,7 @@ function readProjectExtensions(): Extensions {
   if (fs.existsSync(extensionsFile)) {
     try {
       const extensionsData = JSON.parse(fs.readFileSync(extensionsFile, 'utf8'));
+      console.log(`DEBUG: readProjectExtensions - extensionsData:`, extensionsData);
       extensions.marketplace = extensionsData.extensions || [];
       extensions.local = [...extensions.local, ...(extensionsData.local_extensions || [])];
     } catch (error) {
@@ -91,6 +96,7 @@ function readProjectExtensions(): Extensions {
     }
   }
   
+  console.log(`DEBUG: readProjectExtensions - final extensions:`, extensions);
   return extensions;
 }
 
@@ -488,21 +494,10 @@ class SwitcherooApp {
       throw new Error(`Project definition not found: ${cloneScript}`);
     }
 
-    // Read extensions if available
-    let extensions = { marketplace: [], local: [] };
-    if (fs.existsSync(extensionsFile)) {
-      try {
-        const extensionsData = JSON.parse(fs.readFileSync(extensionsFile, 'utf8'));
-        extensions = {
-          marketplace: extensionsData.extensions || [],
-          local: extensionsData.local_extensions || []
-        };
-        const totalCount = extensions.marketplace.length + extensions.local.length;
-        this.log(`Found ${totalCount} extensions to install for ${name}`);
-      } catch (error) {
-        this.log(`Warning: Could not parse vscode-extensions.json: ${error.message}`);
-      }
-    }
+    // Read extensions using the helper that includes built-in extension
+    const extensions = readProjectExtensions();
+    const totalCount = extensions.marketplace.length + extensions.local.length;
+    this.log(`Found ${totalCount} extensions to install for ${name}`);
 
     // Remote target directory for this portal
     const portalPaths = new PortalPaths(uuid);
@@ -571,7 +566,7 @@ class SwitcherooApp {
     if (extensions.local && extensions.local.length > 0) {
       console.log(`Uploading custom extensions...`);
       for (const localExt of extensions.local) {
-        const localPath = path.resolve(LOCAL_DATA_DIR, 'projects', 'theoldswitcheroo', localExt);
+        const localPath = path.resolve(__dirname, localExt);
         const remotePath = `${BASE_DIR}/${path.basename(localExt)}`;
         console.log(`Uploading ${localPath} to ${remotePath}`);
         await execSCP(hostname, localPath, remotePath);
@@ -612,6 +607,7 @@ class SwitcherooApp {
           --extensions-dir ${BASE_DIR}/${dirs.extensionsDir} \\
           --without-connection-token \\
           --enable-remote-auto-shutdown \\
+          --disable-workspace-trust \\
           --default-folder ${BASE_DIR}/${dirs.cloneDir} 2>&1
       `;
 

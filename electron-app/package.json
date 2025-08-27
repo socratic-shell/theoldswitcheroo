@@ -5,10 +5,10 @@
   "type": "module",
   "main": "dist/main.js",
   "scripts": {
-    "build": "tsc",
+    "build": "cd ../extensions/theoldswitcheroo-extension && ./build.sh && cd ../../electron-app && mkdir -p dist && cp ../extensions/theoldswitcheroo-extension/theoldswitcheroo-extension-0.0.1.vsix dist/ && tsc",
     "start": "npm run build && electron .",
     "gui": "npm run build && electron .",
-    "clean": "npm run build && node dist/main.js --clean"
+    "clean": "node clean.js"
   },
   "devDependencies": {
     "@types/electron": "^1.4.38",
