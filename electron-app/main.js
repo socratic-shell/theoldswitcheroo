@@ -57,15 +57,37 @@ async function main() {
   await new SwitcherooApp(hostname).bootUp();
 }
 
-app.whenReady().then(() => {
-  main().catch(console.error);
-});
-
-app.on('activate', () => {
-  if (BaseWindow.getAllWindows().length === 0) {
+// Parse CLI arguments for --clean command
+const args = process.argv.slice(2);
+const cleanIndex = args.indexOf('--clean');
+if (cleanIndex !== -1 && cleanIndex + 1 < args.length) {
+  const hostname = args[cleanIndex + 1];
+  console.log(`Cleaning ~/.socratic-shell/theoldswitcheroo from ${hostname}...`);
+  
+  execSSHCommand(hostname, `rm -rf ~/.socratic-shell/theoldswitcheroo`)
+    .then(() => {
+      console.log(`✓ Cleaned ~/.socratic-shell/theoldswitcheroo from ${hostname}`);
+      process.exit(0);
+    })
+    .catch((error) => {
+      console.error(`✗ Failed to clean from ${hostname}:`, error.message);
+      process.exit(1);
+    });
+} else if (app) {
+  // Normal app startup (only if running in Electron)
+  app.whenReady().then(() => {
     main().catch(console.error);
-  }
-});
+  });
+
+  app.on('activate', () => {
+    if (BaseWindow.getAllWindows().length === 0) {
+      main().catch(console.error);
+    }
+  });
+} else {
+  console.error('This script must be run with Electron or with --clean flag');
+  process.exit(1);
+}
 
 class SwitcherooApp {
   constructor(hostname) {
