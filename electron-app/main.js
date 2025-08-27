@@ -161,6 +161,8 @@ class SwitcherooApp {
       const isAlive = await checkPortalHealth(this.hostname, portal.port);
       if (isAlive) {
         this.log(`✓ Portal ${portal.name}: Server still running on port ${portal.port}`);
+        // Ensure port forwarding is active
+        this.forwardPort(portal.port);
         return; // Server is good
       } else {
         this.log(`Portal ${portal.name}: Server died, restarting...`);
