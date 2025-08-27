@@ -567,7 +567,7 @@ class LoadingView {
   }
 
   updateMessage(message) {
-    this.view.webContents.send('loading-progress', message);
+    this.view.webContents.postMessage('loading-progress', message);
   }
 
   getView() {
