@@ -74,18 +74,24 @@ function readProjectExtensions(): Extensions {
   const projectDir = path.join(LOCAL_DATA_DIR, 'projects', projectName);
   const extensionsFile = path.join(projectDir, 'vscode-extensions.json');
 
+  // Always include the built-in theoldswitcheroo extension
+  const builtinExtension = '../../extensions/theoldswitcheroo-extension/theoldswitcheroo-extension-0.0.1.vsix';
+  let extensions: Extensions = {
+    marketplace: [],
+    local: [builtinExtension]
+  };
+
   if (fs.existsSync(extensionsFile)) {
     try {
       const extensionsData = JSON.parse(fs.readFileSync(extensionsFile, 'utf8'));
-      return {
-        marketplace: extensionsData.extensions || [],
-        local: extensionsData.local_extensions || []
-      };
+      extensions.marketplace = extensionsData.extensions || [];
+      extensions.local = [...extensions.local, ...(extensionsData.local_extensions || [])];
     } catch (error) {
       console.log(`Warning: Could not parse vscode-extensions.json: ${error.message}`);
     }
   }
-  return { marketplace: [], local: [] };
+  
+  return extensions;
 }
 
 // Configure user agent to prevent Electron blocking
