@@ -1,10 +1,15 @@
-const { app, BaseWindow, WebContentsView, session, ipcMain } = require('electron');
-const path = require('path');
-const fs = require('fs');
-const os = require('os');
-const http = require('http');
-const { spawn } = require('child_process');
-const { randomUUID } = require('crypto');
+import { app, BaseWindow, WebContentsView, session, ipcMain } from 'electron';
+import * as path from 'path';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as http from 'http';
+import { spawn } from 'child_process';
+import { randomUUID } from 'crypto';
+import { fileURLToPath } from 'url';
+
+// ES6 module equivalent of __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Type definitions
 interface Extensions {
