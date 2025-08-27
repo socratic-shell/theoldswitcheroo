@@ -8,7 +8,7 @@
     "build": "cd ../extensions/theoldswitcheroo-extension && ./build.sh && cd ../../electron-app && mkdir -p dist && cp ../extensions/theoldswitcheroo-extension/theoldswitcheroo-extension-0.0.1.vsix dist/ && tsc",
     "start": "npm run build && electron .",
     "gui": "npm run build && electron .",
-    "clean": "node clean.js"
+    "clean": "npm run build && node dist/clean.js"
   },
   "devDependencies": {
     "@types/electron": "^1.4.38",

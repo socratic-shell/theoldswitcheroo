@@ -6,6 +6,7 @@ import * as http from 'http';
 import { spawn, ChildProcess } from 'child_process';
 import { randomUUID } from 'crypto';
 import { fileURLToPath } from 'url';
+import { LOCAL_DATA_DIR, PORTALS_FILE, SETTINGS_FILE, BASE_DIR, loadSettings, saveSettings, Settings } from './settings.js';
 
 // ES6 module equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -45,34 +46,6 @@ interface SavedPortalData {
 // Generate UUID v4
 function generateUUID(): string {
   return randomUUID();
-}
-
-// Portal persistence
-const LOCAL_DATA_DIR = path.join(os.homedir(), '.socratic-shell', 'theoldswitcheroo');
-const PORTALS_FILE = path.join(LOCAL_DATA_DIR, 'portals.json');
-const SETTINGS_FILE = path.join(LOCAL_DATA_DIR, 'settings.json');
-const BASE_DIR = "~/.socratic-shell/theoldswitcheroo";
-
-// Load settings from file
-function loadSettings(): { hostname?: string } {
-  try {
-    if (fs.existsSync(SETTINGS_FILE)) {
-      return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
-    }
-  } catch (error) {
-    console.log(`Warning: Could not load settings: ${error.message}`);
-  }
-  return {};
-}
-
-// Save settings to file
-function saveSettings(settings: { hostname?: string }): void {
-  try {
-    fs.mkdirSync(path.dirname(SETTINGS_FILE), { recursive: true });
-    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
-  } catch (error) {
-    console.log(`Warning: Could not save settings: ${error.message}`);
-  }
 }
 
 class PortalPaths {
@@ -832,26 +805,13 @@ class LoadingView implements ILoadingView {
 
 // Get hostname from command line args
 function getHostname() {
-  const args = process.argv.slice(2);
-
-  // Check for command line hostname first
-  if (args.length > 0) {
-    const hostname = args[0];
-    // Save to settings for future use
-    saveSettings({ hostname });
-    return hostname;
-  }
-
-  // Fall back to settings file
   const settings = loadSettings();
   if (settings.hostname) {
     return settings.hostname;
   }
-
-  // No hostname found anywhere
-  console.error('No hostname configured. Either:');
-  console.error('1. Run with: electron main.js <hostname>');
-  console.error('2. Or create ~/.socratic-shell/theoldswitcheroo/settings.json with {"hostname": "your-host"}');
+  
+  console.error('No hostname configured in settings.');
+  console.error('Create ~/.socratic-shell/theoldswitcheroo/settings.json with {"hostname": "your-host"}');
   app.quit();
   process.exit(1);
 }
