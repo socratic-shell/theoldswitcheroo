@@ -12,7 +12,8 @@ function generateUUID() {
 }
 
 // Portal persistence
-const PORTALS_FILE = path.join(os.homedir(), '.socratic-shell', 'theoldswitcheroo', 'portals.json');
+const LOCAL_DATA_DIR = path.join(os.homedir(), '.socratic-shell', 'theoldswitcheroo');
+const PORTALS_FILE = path.join(LOCAL_DATA_DIR, 'portals.json');
 const BASE_DIR = "~/.socratic-shell/theoldswitcheroo";
 
 function portalPaths(uuid) {
@@ -20,7 +21,7 @@ function portalPaths(uuid) {
     dir: `portals/${uuid}`,
     cloneDir: `portals/${uuid}/clone`,
     serverDataDir: `portals/portal-${uuid}/server-data`,
-    freshClone: `portals/${uuid}/fresh-clone.sh`
+    freshCloneSh: `portals/${uuid}/fresh-clone.sh`
   };
 }
 
@@ -61,7 +62,7 @@ class SwitcherooApp {
     // Create a persistent session for this hostname (shared across all sessions)
     // and initialize it for vscode compatibility.
     this.vscodeSession = session.fromPartition(`persist:vscode-${hostname}`);
-    this.vscodeSession.setCodeCachePath(path.join(os.homedir(), '.socratic-shell', 'theoldswitcheroo', 'code-cache'));
+    this.vscodeSession.setCodeCachePath(path.join(LOCAL_DATA_DIR, 'code-cache'));
     this.vscodeSession.webRequest.onHeadersReceived((details, callback) => {
       callback({
         responseHeaders: {
@@ -372,7 +373,7 @@ class SwitcherooApp {
   async cloneProjectForPortal(uuid, name) {
     // For now, hardcode to theoldswitcheroo project
     const projectName = 'theoldswitcheroo';
-    const projectDir = path.join(os.homedir(), '.socratic-shell', 'theoldswitcheroo', 'projects', projectName);
+    const projectDir = path.join(LOCAL_DATA_DIR, 'projects', projectName);
     const cloneScript = path.join(projectDir, 'fresh-clone.sh');
 
     // Check if project definition exists
@@ -381,13 +382,11 @@ class SwitcherooApp {
     }
 
     // Remote target directory for this portal
-    const portalDirs = portalPaths(uuid);
-    const remoteTargetDir = `${BASE_DIR}/${portalDirs.cloneDir}`;
+    const portalPaths = portalPaths(uuid);
+    const remoteTargetDir = `${BASE_DIR}/${portalPaths.cloneDir}`;
 
     // Upload the clone script to portal directory
-    const dirs = portalPaths(uuid);
-    const remoteScriptPath = `${BASE_DIR}/${dirs.freshClone}`;
-    await execSCP(this.hostname, cloneScript, remoteScriptPath);
+    await execSCP(this.hostname, cloneScript, `${BASE_DIR}/${portalPaths.freshCloneSh}`);
     await execSSHCommand(this.hostname, `chmod +x ${remoteScriptPath}`);
 
     // Run the clone script
