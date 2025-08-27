@@ -1,0 +1,21 @@
+{
+  "name": "theoldswitcheroo-extension",
+  "displayName": "The Old Switcheroo",
+  "description": "VSCode multiplexer extension",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": [],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "theoldswitcheroo.helloWorld",
+        "title": "Hello World",
+        "category": "Switcheroo"
+      }
+    ]
+  }
+}

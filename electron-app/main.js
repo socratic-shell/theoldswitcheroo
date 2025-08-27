@@ -34,12 +34,15 @@ function readProjectExtensions() {
   if (fs.existsSync(extensionsFile)) {
     try {
       const extensionsData = JSON.parse(fs.readFileSync(extensionsFile, 'utf8'));
-      return extensionsData.extensions || [];
+      return {
+        marketplace: extensionsData.extensions || [],
+        local: extensionsData.local_extensions || []
+      };
     } catch (error) {
       console.log(`Warning: Could not parse vscode-extensions.json: ${error.message}`);
     }
   }
-  return [];
+  return { marketplace: [], local: [] };
 }
 
 // Configure user agent to prevent Electron blocking
@@ -428,12 +431,16 @@ class SwitcherooApp {
     }
 
     // Read extensions if available
-    let extensions = [];
+    let extensions = { marketplace: [], local: [] };
     if (fs.existsSync(extensionsFile)) {
       try {
         const extensionsData = JSON.parse(fs.readFileSync(extensionsFile, 'utf8'));
-        extensions = extensionsData.extensions || [];
-        this.log(`Found ${extensions.length} extensions to install for ${name}`);
+        extensions = {
+          marketplace: extensionsData.extensions || [],
+          local: extensionsData.local_extensions || []
+        };
+        const totalCount = extensions.marketplace.length + extensions.local.length;
+        this.log(`Found ${totalCount} extensions to install for ${name}`);
       } catch (error) {
         this.log(`Warning: Could not parse vscode-extensions.json: ${error.message}`);
       }
@@ -499,16 +506,22 @@ class SwitcherooApp {
   }
 
   /// Start a vscode server process for the given portal, connected to the given uuid, with the given name.
-  startVSCodeServer(hostname, portalUuid, portalName, extensions = []) {
+  startVSCodeServer(hostname, portalUuid, portalName, extensions = { marketplace: [], local: [] }) {
     return new Promise((resolve, reject) => {
       this.log(`Starting SSH with port forwarding for session ${portalName}...`);
 
       const dirs = portalPaths(portalUuid);
 
       // Build extension install commands
-      const extensionCommands = extensions.length > 0 
-        ? extensions.map(ext => `./openvscode-server/bin/openvscode-server --install-extension ${ext}`).join(' && ')
+      const marketplaceCommands = extensions.marketplace?.length > 0 
+        ? extensions.marketplace.map(ext => `./openvscode-server/bin/openvscode-server --install-extension ${ext}`).join(' && ')
         : '';
+      
+      const localCommands = extensions.local?.length > 0
+        ? extensions.local.map(ext => `./openvscode-server/bin/openvscode-server --install-extension ${ext}`).join(' && ')
+        : '';
+      
+      const allExtensionCommands = [marketplaceCommands, localCommands].filter(cmd => cmd).join(' && ');
 
       // Simple server script with auto-shutdown and data directories
       const serverScript = `
@@ -518,7 +531,7 @@ class SwitcherooApp {
         mkdir -p ${dirs.serverDataDir}
         mkdir -p vscode-user-data
         
-        ${extensionCommands ? `# Install extensions\n        ${extensionCommands}\n        ` : ''}
+        ${allExtensionCommands ? `# Install extensions\n        ${allExtensionCommands}\n        ` : ''}
         # Start VSCode with data directories and dynamic port, opening the cloned project
         ./openvscode-server/bin/openvscode-server \\
           --host 0.0.0.0 \\

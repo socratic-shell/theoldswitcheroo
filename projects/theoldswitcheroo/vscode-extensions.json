@@ -2,5 +2,8 @@
   "extensions": [
     "rust-lang.rust-analyzer",
     "ms-vscode.vscode-typescript-next"
+  ],
+  "local_extensions": [
+    "../../extensions/theoldswitcheroo-extension/theoldswitcheroo-extension-0.0.1.vsix"
   ]
 }
