@@ -15,21 +15,13 @@ function generateUUID() {
 const PORTALS_FILE = path.join(os.homedir(), '.socratic-shell', 'theoldswitcheroo', 'portals.json');
 const BASE_DIR = "~/.socratic-shell/theoldswitcheroo";
 
-// Path helper functions
-function getPortalDir(uuid) {
-  return `${BASE_DIR}/portals/${uuid}`;
-}
-
-function getPortalCloneDir(uuid) {
-  return `${BASE_DIR}/portals/${uuid}/clone`;
-}
-
-function getPortalServerDataDir(uuid) {
-  return `${BASE_DIR}/portals/portal-${uuid}/server-data`;
-}
-
-function getVSCodeUserDataDir() {
-  return `${BASE_DIR}/vscode-user-data`;
+function portalDirectories(uuid) {
+  return {
+    dir: `portals/${uuid}`,
+    cloneDir: `portals/${uuid}/clone`,
+    serverDataDir: `portals/portal-${uuid}/server-data`,
+    vscodeUserDataDir: `vscode-user-data`
+  };
 }
 
 // Configure user agent to prevent Electron blocking
@@ -305,7 +297,7 @@ class SwitcherooApp {
       this.log(`Checking portal ${savedPortalDatum.name}...`);
 
       // Check if portal clone directory still exists
-      const portalCloneDir = getPortalCloneDir(savedPortalDatum.uuid);
+      const portalCloneDir = `${BASE_DIR}/${portalDirectories(savedPortalDatum.uuid).cloneDir}`;
       try {
         await execSSHCommand(this.hostname, `test -d ${portalCloneDir}`);
         this.log(`✓ Portal ${savedPortalDatum.name}: Directory exists`);
@@ -388,7 +380,7 @@ class SwitcherooApp {
     }
 
     // Remote target directory for this portal
-    const remoteTargetDir = getPortalCloneDir(uuid);
+    const remoteTargetDir = `${BASE_DIR}/${portalDirectories(uuid).cloneDir}`;
 
     // Upload the clone script to remote
     const remoteScriptPath = `${BASE_DIR}/fresh-clone-${uuid}.sh`;
@@ -428,7 +420,7 @@ class SwitcherooApp {
           uuid: s.uuid,
           name: s.name,
           port: s.port,
-          serverDataDir: `${BASE_DIR}/portals/portal-${s.uuid}/server-data`,
+          serverDataDir: `${BASE_DIR}/${portalDirectories(s.uuid).serverDataDir}`,
           lastSeen: new Date().toISOString()
         }))
       };
@@ -445,26 +437,25 @@ class SwitcherooApp {
     return new Promise((resolve, reject) => {
       this.log(`Starting SSH with port forwarding for session ${portalName}...`);
 
-      const portalDir = `portals/portal-${portalUuid}`;
-      const projectDir = getPortalCloneDir(portalUuid).replace(`${BASE_DIR}/`, ''); // Remove BASE_DIR prefix for relative path
+      const dirs = portalDirectories(portalUuid);
 
       // Simple server script with auto-shutdown and data directories
       const serverScript = `
         cd ${BASE_DIR}
         
         # Create session-specific directories
-        mkdir -p ${getPortalServerDataDir(portalUuid).replace(`${BASE_DIR}/`, '')}
-        mkdir -p ${getVSCodeUserDataDir().replace(`${BASE_DIR}/`, '')}
+        mkdir -p ${dirs.serverDataDir}
+        mkdir -p ${dirs.vscodeUserDataDir}
         
         # Start VSCode with data directories and dynamic port, opening the cloned project
         ./openvscode-server/bin/openvscode-server \\
           --host 0.0.0.0 \\
           --port 0 \\
-          --user-data-dir ${getVSCodeUserDataDir()} \\
-          --server-data-dir ${getPortalServerDataDir(portalUuid)} \\
+          --user-data-dir ${BASE_DIR}/${dirs.vscodeUserDataDir} \\
+          --server-data-dir ${BASE_DIR}/${dirs.serverDataDir} \\
           --without-connection-token \\
           --enable-remote-auto-shutdown \\
-          ${getPortalCloneDir(portalUuid)} 2>&1
+          ${BASE_DIR}/${dirs.cloneDir} 2>&1
       `;
 
       console.log(serverScript);
