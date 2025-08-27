@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as http from 'http';
-import { spawn } from 'child_process';
+import { spawn, ChildProcess } from 'child_process';
 import { randomUUID } from 'crypto';
 import { fileURLToPath } from 'url';
 
@@ -19,7 +19,7 @@ interface Extensions {
 
 interface ServerInfo {
   port: number;
-  serverProcess?: any; // ChildProcess from child_process, but avoiding import
+  serverProcess?: ChildProcess;
 }
 
 interface ILoadingView {
