@@ -152,6 +152,7 @@ class SwitcherooApp {
   mainWindow!: BaseWindow;
   sidebarView!: WebContentsView;
   mainView: WebContentsView | null = null;
+  sidebarWidth: number = 250; // Track sidebar width
 
   constructor(hostname: string) {
     // Global session management
@@ -177,6 +178,9 @@ class SwitcherooApp {
     this.mainWindow = new BaseWindow({
       width: 1200,
       height: 800,
+      minWidth: 300,
+      minHeight: 400,
+      resizable: true,
       show: false, // Don't show until views are properly set up
       backgroundColor: '#1e1e1e',
       titleBarStyle: 'hidden', // Hide the title bar frame
@@ -203,12 +207,22 @@ class SwitcherooApp {
     ipcMain.handle('create-portal', async () => await this.handleCreatePortal());
     ipcMain.handle('toggle-view', async (_event, portalUuid) => await this.handleToggleViewMessage(portalUuid));
     ipcMain.handle('switch-portal', async (_event, portalUuid) => await this.handleSwitchPortalMessage(portalUuid));
+    ipcMain.handle('resize-sidebar', async (_event, newWidth) => await this.handleSidebarResize(newWidth));
+    ipcMain.handle('toggle-devtools', async () => {
+      this.sidebarView.webContents.toggleDevTools();
+      return { success: true };
+    });
   }
 
   async bootUp() {
     // Show main window immediately with loading view
     this.setMainView(this.loadingView.getView());
     this.mainWindow.show();
+
+    // Add resize event listener to update view bounds
+    this.mainWindow.on('resize', () => {
+      this.updateViewBounds();
+    });
 
     // Initialize the sidebar HTML and wait for it to load.
     this.loadingView.updateMessage('Loading interface...');
@@ -361,6 +375,14 @@ class SwitcherooApp {
     this.activePortalUuid = portal.uuid;
 
     this.notifyPortalsChanged();
+  }
+
+  /// Handles sidebar resize from the sidebar
+  async handleSidebarResize(newWidth: number) {
+    // Clamp width between 250 and 500 pixels
+    this.sidebarWidth = Math.max(250, Math.min(500, newWidth));
+    this.updateViewBounds();
+    return { success: true };
   }
 
   /// Handles a toggle view message from the sidebar
@@ -663,13 +685,12 @@ class SwitcherooApp {
   // Function to update view bounds based on window size
   updateViewBounds() {
     const bounds = this.mainWindow.getBounds();
-    const sidebarWidth = 75;
 
-    this.sidebarView.setBounds({ x: 0, y: 0, width: sidebarWidth, height: bounds.height });
+    this.sidebarView.setBounds({ x: 0, y: 0, width: this.sidebarWidth, height: bounds.height });
 
     // Update bounds for active session's view
     if (this.mainView) {
-      this.mainView.setBounds({ x: sidebarWidth, y: 0, width: bounds.width - sidebarWidth, height: bounds.height });
+      this.mainView.setBounds({ x: this.sidebarWidth, y: 0, width: bounds.width - this.sidebarWidth, height: bounds.height });
     }
   }
 }

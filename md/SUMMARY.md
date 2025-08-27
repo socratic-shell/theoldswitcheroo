@@ -2,6 +2,7 @@
 
 - [Overview](./overview.md)
 - [Architecture](./architecture.md)
+- [MVP](./mvp.md)
 - [Components](./components.md)
   - [Setup Tool](./components/setup-tool.md)
   - [Electron App](./components/electron-app.md)

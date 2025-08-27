@@ -7,13 +7,69 @@
     body {
       margin: 0;
       padding: 0;
-      width: 250px;
+      width: 100%;
       height: 100vh;
       background: #2d2d30;
       overflow: hidden;
       display: flex;
-      flex-direction: column;
+      flex-direction: row;
       font-family: system-ui;
+    }
+
+    .sidebar-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      transition: opacity 0.2s ease;
+    }
+
+    .sidebar-content.collapsed {
+      display: none;
+    }
+
+    .draggable-bar {
+      width: 20px;
+      height: 100vh;
+      background: #007acc;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      -webkit-app-region: no-drag; /* Remove drag - this is just for collapse */
+      position: relative;
+      flex-shrink: 0;
+      user-select: none; /* Prevent text selection */
+      -webkit-user-select: none;
+    }
+
+    .draggable-bar:hover {
+      background: #40a6ff;
+    }
+
+    .draggable-bar::before {
+      content: "⋮";
+      color: white;
+      font-size: 16px;
+      font-weight: bold;
+      transform: rotate(90deg);
+    }
+
+    .draggable-bar.collapsed::before {
+      content: "▶";
+      transform: none;
+      font-size: 12px;
+    }
+
+    /* Window drag area - add this to the top of sidebar content */
+    .window-drag-area {
+      height: 30px;
+      width: 100%;
+      -webkit-app-region: drag;
+      background: transparent;
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 500;
     }
 
     .portals-container {
@@ -21,13 +77,15 @@
       padding: 30px 10px 10px 10px;
       /* Top padding for traffic light buttons */
       overflow-y: auto;
+      overflow-x: hidden; /* Prevent horizontal overflow */
       display: flex;
       flex-direction: column;
       gap: 8px;
+      -webkit-app-region: no-drag; /* Allow interaction with portal boxes */
     }
 
     .portal-box {
-      width: 230px;
+      width: calc(100% - 20px); /* Account for container padding */
       min-height: 60px;
       background: #007acc;
       border-radius: 6px;
@@ -38,6 +96,9 @@
       display: flex;
       flex-direction: column;
       gap: 6px;
+      box-sizing: border-box;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
     }
 
     .portal-box.active {
@@ -49,6 +110,8 @@
       font-size: 14px;
       line-height: 1.2;
       word-wrap: break-word;
+      overflow-wrap: break-word;
+      hyphens: auto;
     }
 
     .portal-bullets {
@@ -60,6 +123,8 @@
     .portal-bullet {
       display: block;
       margin-bottom: 2px;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
     }
 
     .portal-bullet:before {
@@ -73,10 +138,11 @@
       display: flex;
       flex-direction: column;
       gap: 8px;
+      -webkit-app-region: no-drag; /* Allow interaction with buttons */
     }
 
     .toolbar-button {
-      width: 230px;
+      width: calc(100% - 20px);
       height: 40px;
       background: #3c3c3c;
       border: none;
@@ -86,7 +152,9 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 18px;
+      font-size: 14px;
+      margin: 0 10px;
+      box-sizing: border-box;
     }
 
     .toolbar-button:hover {
@@ -146,29 +214,183 @@
     .context-menu-item.danger:hover {
       background: #5a2d2d;
     }
+
+    /* Resize handle */
+    .resize-handle {
+      position: absolute;
+      right: 0; /* Position it on the very right edge of sidebar content */
+      top: 0;
+      width: 8px; /* Make it wider and easier to grab */
+      height: 100%;
+      background: transparent;
+      cursor: ew-resize;
+      -webkit-app-region: no-drag;
+      z-index: 1000;
+    }
+
+    .resize-handle:hover {
+      background: rgba(0, 122, 204, 0.3); /* Semi-transparent blue on hover */
+    }
+
+    /* Collapsed state styles */
+    .collapsed-sidebar {
+      width: 20px;
+      height: 100vh;
+      background: #3e3e42;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-top: 30px;
+      gap: 8px;
+    }
+
+    .collapsed-portal {
+      width: 12px;
+      height: 12px;
+      background: #007acc;
+      border-radius: 2px;
+      cursor: pointer;
+    }
+
+    .collapsed-portal.active {
+      background: #40a6ff;
+    }
   </style>
 </head>
 
 <body>
-  <div class="portals-container" id="portals-container">
-    <!-- portals will be populated dynamically -->
+  <div class="sidebar-content" id="sidebar-content">
+    <div class="window-drag-area"></div>
+    <div class="resize-handle" id="resize-handle"></div>
+    
+    <div class="portals-container" id="portals-container">
+      <!-- portals will be populated dynamically -->
+    </div>
+
+    <div class="bottom-toolbar">
+      <button class="toolbar-button" id="settings-button">⚙ Settings</button>
+      <button class="toolbar-button add-button" id="add-button">+ New Portal</button>
+    </div>
   </div>
 
-  <div class="bottom-toolbar">
-    <button class="toolbar-button" id="settings-button">⚙ Settings</button>
-    <button class="toolbar-button add-button" id="add-button">+ New Portal</button>
-  </div>
+  <div class="draggable-bar" id="draggable-bar"></div>
 
   <script>
     const { ipcRenderer } = require('electron');
 
+    let isCollapsed = false;
+    let currentPortalData = [];
+
     // Handle portal updates from main process
     ipcRenderer.on('update-portals', (event, data) => {
+      currentPortalData = data.portalData;
       updatePortalsUI(data.portalData, data.activePortalUuid);
     });
 
+    // Toggle sidebar collapse
+    document.getElementById('draggable-bar').addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      isCollapsed = !isCollapsed;
+      toggleSidebar();
+    });
+
+    // Prevent dragging from interfering with clicking
+    document.getElementById('draggable-bar').addEventListener('mousedown', (e) => {
+      // Allow a small delay to distinguish between click and drag
+      setTimeout(() => {
+        if (!e.defaultPrevented) {
+          // This was a drag, not a click
+        }
+      }, 100);
+    });
+
+    function toggleSidebar() {
+      const sidebarContent = document.getElementById('sidebar-content');
+      const draggableBar = document.getElementById('draggable-bar');
+      
+      // Remove any existing collapsed sidebar first
+      const existingCollapsed = document.getElementById('collapsed-sidebar');
+      if (existingCollapsed) {
+        existingCollapsed.remove();
+      }
+      
+      if (isCollapsed) {
+        sidebarContent.style.display = 'none';
+        draggableBar.classList.add('collapsed');
+        ipcRenderer.invoke('resize-sidebar', 20);
+        showCollapsedPortals();
+      } else {
+        sidebarContent.style.display = 'flex';
+        draggableBar.classList.remove('collapsed');
+        ipcRenderer.invoke('resize-sidebar', 250);
+      }
+    }
+
+    function showCollapsedPortals() {
+      // Create collapsed view
+      const collapsedSidebar = document.createElement('div');
+      collapsedSidebar.className = 'collapsed-sidebar';
+      collapsedSidebar.id = 'collapsed-sidebar';
+      
+      currentPortalData.forEach(portalDatum => {
+        const collapsedPortal = document.createElement('div');
+        collapsedPortal.className = `collapsed-portal ${portalDatum.active ? 'active' : ''}`;
+        collapsedPortal.title = portalDatum.name;
+        collapsedPortal.addEventListener('click', () => switchToPortal(portalDatum.uuid));
+        collapsedSidebar.appendChild(collapsedPortal);
+      });
+      
+      // Insert before the draggable bar
+      document.body.insertBefore(collapsedSidebar, document.getElementById('draggable-bar'));
+    }
+
+    // Add keyboard shortcut for developer tools
+    document.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'I') {
+        ipcRenderer.invoke('toggle-devtools');
+      }
+    });
+
+    // Sidebar resize functionality
+    let isResizing = false;
+    const resizeHandle = document.getElementById('resize-handle');
+    
+    resizeHandle.addEventListener('mousedown', (e) => {
+      if (isCollapsed) return;
+      isResizing = true;
+      document.addEventListener('mousemove', handleResize);
+      document.addEventListener('mouseup', stopResize);
+      e.preventDefault();
+    });
+
+    function handleResize(e) {
+      if (!isResizing || isCollapsed) return;
+      
+      const newWidth = e.clientX;
+      if (newWidth >= 250 && newWidth <= 500) { // Min 250px, max 500px
+        ipcRenderer.invoke('resize-sidebar', newWidth);
+      }
+    }
+
+    function stopResize() {
+      isResizing = false;
+      document.removeEventListener('mousemove', handleResize);
+      document.removeEventListener('mouseup', stopResize);
+    }
+
     // Update the portals UI
     function updatePortalsUI(portalData, activePortalUuid) {
+      if (isCollapsed) {
+        // Remove old collapsed sidebar if it exists
+        const oldCollapsed = document.getElementById('collapsed-sidebar');
+        if (oldCollapsed) {
+          oldCollapsed.remove();
+        }
+        showCollapsedPortals();
+        return;
+      }
+
       const container = document.getElementById('portals-container');
       container.innerHTML = '';
 
@@ -270,8 +492,11 @@
           document.querySelectorAll('.portal-box').forEach(box => {
             box.classList.remove('active');
           });
+          document.querySelectorAll('.collapsed-portal').forEach(box => {
+            box.classList.remove('active');
+          });
 
-          const activeBox = document.querySelector(`[data-portal-id="${portalUuid}"]`);
+          const activeBox = document.querySelector(`[data-portal-uuid="${portalUuid}"]`);
           if (activeBox) {
             activeBox.classList.add('active');
           }
