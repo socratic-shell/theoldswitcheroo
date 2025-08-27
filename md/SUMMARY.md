@@ -9,6 +9,11 @@
   - [MCP Server](./components/mcp-server.md)
 - [Development](./development.md)
 
+# Technical details
+
+<!-- Describes how we manage the SSH connection(s) to the host -->
+- [SSH connection handling](./ssh-connection-handling.md)
+
 # Reference Material
 
 <!--

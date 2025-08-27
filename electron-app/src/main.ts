@@ -7,6 +7,7 @@ import { spawn, ChildProcess } from 'child_process';
 import { randomUUID } from 'crypto';
 import { fileURLToPath } from 'url';
 import { LOCAL_DATA_DIR, PORTALS_FILE, SETTINGS_FILE, BASE_DIR, loadSettings, saveSettings, Settings } from './settings.js';
+import { sshManager } from './ssh-manager.js';
 
 // ES6 module equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -600,69 +601,55 @@ class SwitcherooApp {
 
       console.log(serverScript);
 
-      const ssh = spawn('ssh', [
-        '-o', 'ControlMaster=auto',
-        '-o', `ControlPath=~/.ssh/cm-${hostname}`,
-        '-o', 'ControlPersist=10m',
-        hostname,
-        serverScript
-      ], {
-        stdio: ['pipe', 'pipe', 'pipe']
-      });
+      // Get the SSH process for streaming
+      sshManager.executeStreamingCommand(hostname, serverScript).then(ssh => {
+        let actualPort = null;
 
-      let actualPort = null;
+        ssh.stdout.on('data', (data) => {
+          const output = data.toString();
+          this.log(`[VSCode Server ${portalName}] ${output.trim()}`);
 
-      ssh.stdout.on('data', (data) => {
-        const output = data.toString();
-        this.log(`[VSCode Server ${portalName}] ${output.trim()}`);
+          // Look for VSCode's port announcement in its output
+          // VSCode typically outputs: "Web UI available at http://localhost:XXXX"
+          const portMatch = output.match(/Web UI available at.*:(\d+)/i) ||
+            output.match(/localhost:(\d+)/) ||
+            output.match(/127\.0\.0\.1:(\d+)/) ||
+            output.match(/0\.0\.0\.0:(\d+)/);
 
-        // Look for VSCode's port announcement in its output
-        // VSCode typically outputs: "Web UI available at http://localhost:XXXX"
-        const portMatch = output.match(/Web UI available at.*:(\d+)/i) ||
-          output.match(/localhost:(\d+)/) ||
-          output.match(/127\.0\.0\.1:(\d+)/) ||
-          output.match(/0\.0\.0\.0:(\d+)/);
+          if (portMatch && !actualPort) {
+            actualPort = parseInt(portMatch[1]);
+            this.log(`✓ VSCode server ${portalName} ready on port ${actualPort}`);
 
-        if (portMatch && !actualPort) {
-          actualPort = parseInt(portMatch[1]);
-          this.log(`✓ VSCode server ${portalName} ready on port ${actualPort}`);
+            resolve({ serverProcess: ssh, port: actualPort });
+          }
+        });
 
-          resolve({ serverProcess: ssh, port: actualPort });
-        }
-      });
+        ssh.stderr.on('data', (data) => {
+          const output = data.toString().trim();
+          console.error(`[VSCode Server ${portalName} Error] ${output}`);
+        });
 
-      ssh.stderr.on('data', (data) => {
-        const output = data.toString().trim();
-        console.error(`[VSCode Server ${portalName} Error] ${output}`);
-      });
+        ssh.on('close', (code) => {
+          this.log(`SSH process for session ${portalName} exited with code ${code}`);
+        });
 
-      ssh.on('close', (code) => {
-        this.log(`SSH process for session ${portalName} exited with code ${code}`);
-      });
+        ssh.on('error', (err) => {
+          reject(new Error(`Failed to start SSH: ${err.message}`));
+        });
 
-      ssh.on('error', (err) => {
-        reject(new Error(`Failed to start SSH: ${err.message}`));
-      });
-
-      // Timeout if server doesn't start
-      setTimeout(() => {
-        if (!actualPort) {
-          reject(new Error(`VSCode server startup timeout for session ${portalName}`));
-        }
-      }, 60000); // 60 second timeout
+        // Timeout if server doesn't start
+        setTimeout(() => {
+          if (!actualPort) {
+            reject(new Error(`VSCode server startup timeout for session ${portalName}`));
+          }
+        }, 60000); // 60 second timeout
+      }).catch(reject);
     });
   }
 
-  // ForSet up port forwarding for the actual port
+  // Set up port forwarding for the actual port
   forwardPort(port: number) {
-    return spawn('ssh', [
-      '-o', 'ControlMaster=auto',
-      '-o', `ControlPath=~/.ssh/cm-${this.hostname}`,
-      '-o', 'ControlPersist=10m',
-      '-L', `${port}:localhost:${port}`,
-      '-N',
-      this.hostname
-    ]);
+    return sshManager.createTunnel(this.hostname, port, port);
   }
 
 
@@ -837,72 +824,15 @@ function getHostname() {
   process.exit(1);
 }
 
-// Execute SSH command using system ssh with ControlMaster
+// Execute SSH command using SSH manager with ControlMaster
 async function execSSHCommand(hostname: string, command: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    console.log("execSSHCommand: ", hostname, command);
-    const ssh = spawn('ssh', [
-      '-o', 'ControlMaster=auto',
-      '-o', `ControlPath=~/.ssh/cm-${hostname}`,
-      '-o', 'ControlPersist=10m',
-      hostname,
-      command
-    ], {
-      stdio: ['pipe', 'pipe', 'pipe']
-    });
-
-    let stdout = '';
-    let stderr = '';
-
-    ssh.stdout.on('data', (data) => {
-      console.log("stdout: ", data);
-      stdout += data.toString();
-    });
-
-    ssh.stderr.on('data', (data) => {
-      console.log("stderr: ", data);
-      stderr += data.toString();
-    });
-
-    ssh.on('close', (code) => {
-      if (code === 0) {
-        resolve(stdout.trim());
-      } else {
-        reject(new Error(`SSH command '${command}' on ${hostname} failed (${code}): ${stderr}`));
-      }
-    });
-  });
+  return sshManager.executeCommand(hostname, command);
 }
 
 // Upload file using scp with ControlMaster
+// Upload file using SSH manager with ControlMaster
 async function execSCP(hostname: string, localPath: string, remotePath: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    console.log("execSCP: ", localPath, "->", `${hostname}:${remotePath}`);
-    const scp = spawn('scp', [
-      '-o', 'ControlMaster=auto',
-      '-o', `ControlPath=~/.ssh/cm-${hostname}`,
-      '-o', 'ControlPersist=10m',
-      localPath,
-      `${hostname}:${remotePath}`
-    ], {
-      stdio: ['pipe', 'pipe', 'pipe']
-    });
-
-    let stderr = '';
-
-    scp.stderr.on('data', (data) => {
-      console.log("scp stderr: ", data);
-      stderr += data.toString();
-    });
-
-    scp.on('close', (code) => {
-      if (code === 0) {
-        resolve(undefined);
-      } else {
-        reject(new Error(`SCP failed with code ${code}: ${stderr}`));
-      }
-    });
-  });
+  return sshManager.uploadFile(hostname, localPath, remotePath);
 }
 
 // Map architecture output to VSCode server architecture
