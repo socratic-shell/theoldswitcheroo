@@ -14,25 +14,27 @@ async function build() {
   try {
     // Bundle daemon
     await esbuild.build({
-      entryPoints: ['daemon.js'],
+      entryPoints: ['daemon.ts'],
       bundle: true,
       platform: 'node',
       target: 'node18',
       outfile: '../dist/daemon-bundled.js',
       banner: { js: '#!/usr/bin/env node' },
-      external: [] // Bundle all dependencies
+      external: [], // Bundle all dependencies
+      format: 'cjs'
     });
     console.log('✓ Built daemon-bundled.js');
 
     // Bundle CLI tool
     await esbuild.build({
-      entryPoints: ['cli-tool.js'],
+      entryPoints: ['cli-tool.ts'],
       bundle: true,
       platform: 'node',
       target: 'node18',
       outfile: '../dist/theoldswitcheroo-bundled.js',
       banner: { js: '#!/usr/bin/env node' },
-      external: [] // Bundle all dependencies
+      external: [], // Bundle all dependencies
+      format: 'cjs'
     });
     console.log('✓ Built theoldswitcheroo-bundled.js');
 
