@@ -18,12 +18,18 @@ async function build() {
       bundle: true,
       platform: 'node',
       target: 'node18',
-      outfile: '../dist/daemon-bundled.js',
-      banner: { js: '#!/usr/bin/env node' },
+      outfile: '../dist/daemon-bundled.cjs',
       external: [], // Bundle all dependencies
       format: 'cjs'
     });
-    console.log('✓ Built daemon-bundled.js');
+    
+    // Add shebang to daemon
+    const daemonPath = path.join(distDir, 'daemon-bundled.cjs');
+    let daemonContent = fs.readFileSync(daemonPath, 'utf8');
+    daemonContent = daemonContent.replace(/^#!.*\n/, ''); // Remove existing shebang
+    fs.writeFileSync(daemonPath, '#!/usr/bin/env node\n' + daemonContent);
+    
+    console.log('✓ Built daemon-bundled.cjs');
 
     // Bundle CLI tool
     await esbuild.build({
@@ -31,16 +37,22 @@ async function build() {
       bundle: true,
       platform: 'node',
       target: 'node18',
-      outfile: '../dist/theoldswitcheroo-bundled.js',
-      banner: { js: '#!/usr/bin/env node' },
+      outfile: '../dist/theoldswitcheroo-bundled.cjs',
       external: [], // Bundle all dependencies
       format: 'cjs'
     });
-    console.log('✓ Built theoldswitcheroo-bundled.js');
+    
+    // Add shebang to CLI tool
+    const cliPath = path.join(distDir, 'theoldswitcheroo-bundled.cjs');
+    let cliContent = fs.readFileSync(cliPath, 'utf8');
+    cliContent = cliContent.replace(/^#!.*\n/, ''); // Remove existing shebang
+    fs.writeFileSync(cliPath, '#!/usr/bin/env node\n' + cliContent);
+    
+    console.log('✓ Built theoldswitcheroo-bundled.cjs');
 
     // Make bundled files executable
-    fs.chmodSync(path.join(distDir, 'daemon-bundled.js'), 0o755);
-    fs.chmodSync(path.join(distDir, 'theoldswitcheroo-bundled.js'), 0o755);
+    fs.chmodSync(daemonPath, 0o755);
+    fs.chmodSync(cliPath, 0o755);
     console.log('✓ Made files executable');
 
   } catch (error) {
