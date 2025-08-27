@@ -27,6 +27,21 @@ interface ILoadingView {
   getView(): any;
 }
 
+interface SavedPortalDatum {
+  uuid: string;
+  name: string;
+  port: number;
+  serverDataDir: string;
+  lastSeen: string;
+}
+
+interface SavedPortalData {
+  hostname: string | null;
+  activePortalUuid?: string | null;
+  portals: SavedPortalDatum[];
+  sessions?: SavedPortalDatum[]; // legacy field
+}
+
 // Generate UUID v4
 function generateUUID(): string {
   return randomUUID();
@@ -126,9 +141,9 @@ class SwitcherooApp {
   hostname: string;
   loadingView: ILoadingView;
   vscodeSession: Session;
-  mainWindow: any = null;
-  sidebarView: any = null;
-  mainView: any = null;
+  mainWindow!: BaseWindow;
+  sidebarView!: WebContentsView;
+  mainView: WebContentsView | null = null;
 
   constructor(hostname: string) {
     // Global session management
@@ -190,8 +205,8 @@ class SwitcherooApp {
     // Initialize the sidebar HTML and wait for it to load.
     this.loadingView.updateMessage('Loading interface...');
     this.sidebarView.webContents.loadFile(path.join(__dirname, '..', 'sidebar.html'));
-    await new Promise(resolve => {
-      this.sidebarView.webContents.once('did-finish-load', resolve);
+    await new Promise<void>(resolve => {
+      this.sidebarView.webContents.once('did-finish-load', () => resolve());
     });
 
     // Load existing portals
@@ -227,7 +242,7 @@ class SwitcherooApp {
   /// Replace the "main view" in our app with `view`
   /// and resize it to balance it with the sidebar (which is never removed).
   /// This will remove the existing main view, if any.
-  setMainView(view) {
+  setMainView(view: WebContentsView | null) {
     // Remove the old main view (leave the sidebar view)
     if (this.mainView) {
       this.mainWindow.contentView.removeChildView(this.mainView);
@@ -371,7 +386,7 @@ class SwitcherooApp {
     return portal;
   }
 
-  async restoreSavedPortals(savedPortalData) {
+  async restoreSavedPortals(savedPortalData: SavedPortalData) {
     this.log(`Restoring previous session with ${savedPortalData.portals.length} existing portals`);
 
     // Check directory existence for each saved portal
@@ -505,7 +520,7 @@ class SwitcherooApp {
   }
 
   // Load portals JSON from disk
-  loadPortalData() {
+  loadPortalData(): SavedPortalData {
     try {
       if (fs.existsSync(PORTALS_FILE)) {
         const data = fs.readFileSync(PORTALS_FILE, 'utf8');
@@ -514,7 +529,7 @@ class SwitcherooApp {
     } catch (error) {
       console.error('Failed to load sessions:', error.message);
     }
-    return { hostname: null, sessions: [] };
+    return { hostname: null, portals: [] };
   }
 
   // Save portal JSON to disk
