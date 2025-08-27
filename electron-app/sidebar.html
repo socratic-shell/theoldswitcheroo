@@ -31,11 +31,11 @@
       width: 20px;
       height: 100vh;
       background: #007acc;
-      cursor: pointer;
+      cursor: ew-resize; /* Change to resize cursor */
       display: flex;
       align-items: center;
       justify-content: center;
-      -webkit-app-region: no-drag; /* Remove drag - this is just for collapse */
+      -webkit-app-region: no-drag; /* No window dragging */
       position: relative;
       flex-shrink: 0;
       user-select: none; /* Prevent text selection */
@@ -287,23 +287,50 @@
       updatePortalsUI(data.portalData, data.activePortalUuid);
     });
 
-    // Toggle sidebar collapse
-    document.getElementById('draggable-bar').addEventListener('click', (e) => {
+    // Blue bar resize and collapse functionality
+    let isResizingBlueBar = false;
+    let resizeStartX = 0;
+    
+    document.getElementById('draggable-bar').addEventListener('mousedown', (e) => {
+      resizeStartX = e.clientX;
+      isResizingBlueBar = true;
+      document.addEventListener('mousemove', handleBlueBarResize);
+      document.addEventListener('mouseup', stopBlueBarResize);
       e.preventDefault();
-      e.stopPropagation();
-      isCollapsed = !isCollapsed;
-      toggleSidebar();
     });
 
-    // Prevent dragging from interfering with clicking
-    document.getElementById('draggable-bar').addEventListener('mousedown', (e) => {
-      // Allow a small delay to distinguish between click and drag
-      setTimeout(() => {
-        if (!e.defaultPrevented) {
-          // This was a drag, not a click
+    function handleBlueBarResize(e) {
+      if (!isResizingBlueBar) return;
+      
+      const deltaX = e.clientX - resizeStartX;
+      
+      // If moved more than 5px, it's a resize operation
+      if (Math.abs(deltaX) > 5) {
+        const currentWidth = parseInt(document.body.style.width) || 250;
+        const newWidth = currentWidth + deltaX;
+        
+        if (newWidth >= 250 && newWidth <= 500) {
+          ipcRenderer.invoke('resize-sidebar', newWidth);
+          resizeStartX = e.clientX; // Update start position for smooth dragging
         }
-      }, 100);
-    });
+      }
+    }
+
+    function stopBlueBarResize(e) {
+      if (isResizingBlueBar) {
+        const deltaX = e.clientX - resizeStartX;
+        
+        // If moved less than 5px, treat it as a click (collapse/expand)
+        if (Math.abs(deltaX) <= 5) {
+          isCollapsed = !isCollapsed;
+          toggleSidebar();
+        }
+      }
+      
+      isResizingBlueBar = false;
+      document.removeEventListener('mousemove', handleBlueBarResize);
+      document.removeEventListener('mouseup', stopBlueBarResize);
+    }
 
     function toggleSidebar() {
       const sidebarContent = document.getElementById('sidebar-content');
