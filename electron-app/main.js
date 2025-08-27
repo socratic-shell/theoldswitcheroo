@@ -15,11 +15,12 @@ function generateUUID() {
 const PORTALS_FILE = path.join(os.homedir(), '.socratic-shell', 'theoldswitcheroo', 'portals.json');
 const BASE_DIR = "~/.socratic-shell/theoldswitcheroo";
 
-function portalDirectories(uuid) {
+function portalPaths(uuid) {
   return {
     dir: `portals/${uuid}`,
     cloneDir: `portals/${uuid}/clone`,
-    serverDataDir: `portals/portal-${uuid}/server-data`
+    serverDataDir: `portals/portal-${uuid}/server-data`,
+    freshClone: `portals/${uuid}/fresh-clone.sh`
   };
 }
 
@@ -296,7 +297,7 @@ class SwitcherooApp {
       this.log(`Checking portal ${savedPortalDatum.name}...`);
 
       // Check if portal clone directory still exists
-      const portalDirs = portalDirectories(savedPortalDatum.uuid);
+      const portalDirs = portalPaths(savedPortalDatum.uuid);
       const portalCloneDir = `${BASE_DIR}/${portalDirs.cloneDir}`;
       try {
         await execSSHCommand(this.hostname, `test -d ${portalCloneDir}`);
@@ -380,12 +381,12 @@ class SwitcherooApp {
     }
 
     // Remote target directory for this portal
-    const portalDirs = portalDirectories(uuid);
+    const portalDirs = portalPaths(uuid);
     const remoteTargetDir = `${BASE_DIR}/${portalDirs.cloneDir}`;
 
     // Upload the clone script to portal directory
-    const dirs = portalDirectories(uuid);
-    const remoteScriptPath = `${BASE_DIR}/${dirs.dir}/fresh-clone.sh`;
+    const dirs = portalPaths(uuid);
+    const remoteScriptPath = `${BASE_DIR}/${dirs.freshClone}`;
     await execSCP(this.hostname, cloneScript, remoteScriptPath);
     await execSSHCommand(this.hostname, `chmod +x ${remoteScriptPath}`);
 
@@ -419,7 +420,7 @@ class SwitcherooApp {
           uuid: s.uuid,
           name: s.name,
           port: s.port,
-          serverDataDir: `${BASE_DIR}/${portalDirectories(s.uuid).serverDataDir}`,
+          serverDataDir: `${BASE_DIR}/${portalPaths(s.uuid).serverDataDir}`,
           lastSeen: new Date().toISOString()
         }))
       };
@@ -436,7 +437,7 @@ class SwitcherooApp {
     return new Promise((resolve, reject) => {
       this.log(`Starting SSH with port forwarding for session ${portalName}...`);
 
-      const dirs = portalDirectories(portalUuid);
+      const dirs = portalPaths(portalUuid);
 
       // Simple server script with auto-shutdown and data directories
       const serverScript = `
