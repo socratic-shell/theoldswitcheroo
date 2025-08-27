@@ -7,12 +7,16 @@ VSCode multiplexer experiment
 ### Normal Operation
 ```bash
 cd electron-app
+npm run gui
+# or
 electron main.js
 ```
 
 ### Cleanup
 ```bash
 cd electron-app
+npm run clean <hostname>
+# or
 node main.js --clean <hostname>
 ```
 

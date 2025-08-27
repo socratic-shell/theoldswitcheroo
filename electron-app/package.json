@@ -4,7 +4,9 @@
   "description": "VSCode multiplexer for AI agent workspaces",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "gui": "electron .",
+    "clean": "node main.js --clean"
   },
   "devDependencies": {
     "electron": "^37.3.1"
