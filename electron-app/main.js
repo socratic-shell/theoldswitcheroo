@@ -155,6 +155,41 @@ class SwitcherooApp {
     this.updateViewBounds();
   }
 
+  async ensureVSCodeServer(portal) {
+    // If portal already has a running server, check if it's still alive
+    if (portal.port) {
+      const isAlive = await checkPortalHealth(this.hostname, portal.port);
+      if (isAlive) {
+        this.log(`✓ Portal ${portal.name}: Server still running on port ${portal.port}`);
+        return; // Server is good
+      } else {
+        this.log(`Portal ${portal.name}: Server died, restarting...`);
+      }
+    }
+
+    // Start fresh server
+    this.log(`Starting VSCode server for portal ${portal.name}...`);
+    
+    // Detect architecture
+    const archOutput = await execSSHCommand(this.hostname, 'uname -m');
+    const arch = mapArchitecture(archOutput.toLowerCase());
+    
+    // Install VSCode server
+    await installVSCodeServer(this.hostname, arch);
+    
+    // Start server
+    const serverInfo = await this.startVSCodeServer(this.hostname, portal.uuid, portal.name);
+    
+    // Update portal with new server info
+    portal.port = serverInfo.port;
+    portal.serverProcess = serverInfo.serverProcess;
+    
+    // Start port forwarding
+    this.forwardPort(serverInfo.port);
+    
+    this.log(`✓ Portal ${portal.name}: Server ready on port ${portal.port}`);
+  }
+
   /// Log messages to console
   log(message) {
     console.log(message);
@@ -237,7 +272,7 @@ class SwitcherooApp {
     await this.createPortalDirectory(uuid, name);
     
     // Create portal object with no server running yet
-    const portal = new Portal(uuid, name, this.hostname);
+    const portal = new Portal(uuid, name, this.hostname, null, null, this);
     this.portals.push(portal);
     
     this.notifyPortalsChanged();
@@ -247,29 +282,22 @@ class SwitcherooApp {
   async restoreSavedPortals(savedPortalData) {
     this.log(`Restoring previous session with ${savedPortalData.portals.length} existing portals`);
 
-    // Check health of each saved session
+    // Check directory existence for each saved portal
     for (const savedPortalDatum of savedPortalData.portals) {
       this.log(`Checking portal ${savedPortalDatum.name}...`);
 
-      const isAlive = await checkPortalHealth(this.hostname, savedPortalDatum.port);
-      if (isAlive) {
-        this.log(`✓ Portal ${savedPortalDatum.name}: Reconnecting to port ${savedPortalDatum.port}`);
+      // Check if portal directory still exists
+      const portalDir = `${BASE_DIR}/portals/${savedPortalDatum.uuid}`;
+      try {
+        await execSSHCommand(this.hostname, `test -d ${portalDir}`);
+        this.log(`✓ Portal ${savedPortalDatum.name}: Directory exists`);
 
-        const _forwardPid = this.forwardPort(savedPortalDatum.port);
-        this.log(`✓ Forwarding port ${savedPortalDatum.port}`);
-
-        // Create session object for existing server
-        const portal = new Portal(savedPortalDatum.uuid, savedPortalDatum.name, this.hostname, savedPortalDatum.port, null);
+        // Create portal object with saved port (server status unknown)
+        const portal = new Portal(savedPortalDatum.uuid, savedPortalDatum.name, this.hostname, savedPortalDatum.port, null, this);
         this.portals.push(portal);
-      } else {
-        this.log(`Portal ${savedPortalDatum.name}: Server died, will restart...`);
-        // Create new server with same session ID
-        try {
-          const portal = await this.finalizePortal(savedPortalDatum.uuid, savedPortalDatum.name);
-          this.log(`✓ Portal ${savedPortalDatum.name}: Restarted on port ${portal.port}`);
-        } catch (error) {
-          this.log(`✗ Portal ${savedPortalDatum.name}: Failed to restart - ${error.message}`);
-        }
+      } catch (error) {
+        this.log(`✗ Portal ${savedPortalDatum.name}: Directory missing, removing from list`);
+        // Portal directory is gone, don't restore it
       }
     }
 
@@ -325,7 +353,7 @@ class SwitcherooApp {
     const _forwardPid = this.forwardPort(serverInfo.port);
     this.log(`✓ Forwarding port ${serverInfo.port}`);
 
-    const portal = new Portal(uuid, name, this.hostname, serverInfo.port, serverInfo.serverProcess);
+    const portal = new Portal(uuid, name, this.hostname, serverInfo.port, serverInfo.serverProcess, this);
     this.portals.push(portal);
     return portal;
   }
@@ -521,12 +549,13 @@ class SwitcherooApp {
 
 /// A "Portal" is an active VSCode window.
 class Portal {
-  constructor(uuid, name, hostname, port = null, serverProcess = null) {
+  constructor(uuid, name, hostname, port = null, serverProcess = null, app = null) {
     this.uuid = uuid;
     this.name = name;
     this.hostname = hostname;
     this.port = port;
     this.serverProcess = serverProcess;
+    this.app = app; // Reference to SwitcherooApp for server management
     this.viewName = 'vscode'; // current view, vscode or meta
     this.createdAt = new Date();
     this.vscodeView = null; // Will be created when first accessed
@@ -551,6 +580,11 @@ class Portal {
 
     if (this.viewName == 'vscode') {
       if (!this.vscodeView) {
+        // Ensure VSCode server is running
+        if (this.app) {
+          await this.app.ensureVSCodeServer(this);
+        }
+
         // Create WebContentsView for active session
         this.vscodeView = new WebContentsView({
           webPreferences: {
