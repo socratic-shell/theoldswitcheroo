@@ -1,6 +1,9 @@
-const esbuild = require('esbuild');
-const fs = require('fs');
-const path = require('path');
+import esbuild from 'esbuild';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 async function build() {
   // Ensure dist directory exists
@@ -18,18 +21,18 @@ async function build() {
       bundle: true,
       platform: 'node',
       target: 'node18',
-      outfile: '../dist/daemon-bundled.cjs',
+      outfile: '../dist/daemon-bundled.js',
       external: [], // Bundle all dependencies
-      format: 'cjs'
+      format: 'esm'
     });
     
     // Add shebang to daemon
-    const daemonPath = path.join(distDir, 'daemon-bundled.cjs');
+    const daemonPath = path.join(distDir, 'daemon-bundled.js');
     let daemonContent = fs.readFileSync(daemonPath, 'utf8');
     daemonContent = daemonContent.replace(/^#!.*\n/, ''); // Remove existing shebang
     fs.writeFileSync(daemonPath, '#!/usr/bin/env node\n' + daemonContent);
     
-    console.log('✓ Built daemon-bundled.cjs');
+    console.log('✓ Built daemon-bundled.js');
 
     // Bundle CLI tool
     await esbuild.build({
@@ -37,18 +40,18 @@ async function build() {
       bundle: true,
       platform: 'node',
       target: 'node18',
-      outfile: '../dist/theoldswitcheroo-bundled.cjs',
+      outfile: '../dist/theoldswitcheroo-bundled.js',
       external: [], // Bundle all dependencies
-      format: 'cjs'
+      format: 'esm'
     });
     
     // Add shebang to CLI tool
-    const cliPath = path.join(distDir, 'theoldswitcheroo-bundled.cjs');
+    const cliPath = path.join(distDir, 'theoldswitcheroo-bundled.js');
     let cliContent = fs.readFileSync(cliPath, 'utf8');
     cliContent = cliContent.replace(/^#!.*\n/, ''); // Remove existing shebang
     fs.writeFileSync(cliPath, '#!/usr/bin/env node\n' + cliContent);
     
-    console.log('✓ Built theoldswitcheroo-bundled.cjs');
+    console.log('✓ Built theoldswitcheroo-bundled.js');
 
     // Make bundled files executable
     fs.chmodSync(daemonPath, 0o755);

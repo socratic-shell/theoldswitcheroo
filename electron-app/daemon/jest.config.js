@@ -1,5 +1,6 @@
-module.exports = {
-  preset: 'ts-jest',
+export default {
+  preset: 'ts-jest/presets/default-esm',
+  extensionsToTreatAsEsm: ['.ts'],
   testEnvironment: 'node',
   testMatch: ['**/__tests__/**/*.ts', '**/?(*.)+(spec|test).ts'],
   collectCoverageFrom: [
@@ -7,5 +8,10 @@ module.exports = {
     '!build.js',
     '!jest.config.js'
   ],
-  setupFilesAfterEnv: ['<rootDir>/test-setup.js']
+  setupFilesAfterEnv: ['<rootDir>/test-setup.js'],
+  globals: {
+    'ts-jest': {
+      useESM: true
+    }
+  }
 };

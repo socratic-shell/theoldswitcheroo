@@ -6,7 +6,7 @@ import * as path from 'path';
 describe('Portal Daemon', () => {
   let daemonProcess: ChildProcess;
   const testSocketPath = '/tmp/test-daemon.sock';
-  const bundledDaemonPath = path.join(__dirname, '..', 'dist', 'daemon-bundled.cjs');
+  const bundledDaemonPath = path.join(__dirname, '..', 'dist', 'daemon-bundled.js');
 
   beforeEach(async () => {
     // Clean up any existing socket

@@ -2,6 +2,7 @@
   "name": "theoldswitcheroo-daemon",
   "version": "1.0.0",
   "description": "Portal communication daemon and CLI tools",
+  "type": "module",
   "main": "daemon.ts",
   "scripts": {
     "build": "node build.js",
