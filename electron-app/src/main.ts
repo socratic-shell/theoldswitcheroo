@@ -33,13 +33,13 @@ interface SavedPortalDatum {
   port: number;
   serverDataDir: string;
   lastSeen: string;
+  extensions: Extensions;
 }
 
 interface SavedPortalData {
   hostname: string | null;
   activePortalUuid?: string | null;
   portals: SavedPortalDatum[];
-  sessions?: SavedPortalDatum[]; // legacy field
 }
 
 // Generate UUID v4
@@ -50,7 +50,30 @@ function generateUUID(): string {
 // Portal persistence
 const LOCAL_DATA_DIR = path.join(os.homedir(), '.socratic-shell', 'theoldswitcheroo');
 const PORTALS_FILE = path.join(LOCAL_DATA_DIR, 'portals.json');
+const SETTINGS_FILE = path.join(LOCAL_DATA_DIR, 'settings.json');
 const BASE_DIR = "~/.socratic-shell/theoldswitcheroo";
+
+// Load settings from file
+function loadSettings(): { hostname?: string } {
+  try {
+    if (fs.existsSync(SETTINGS_FILE)) {
+      return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
+    }
+  } catch (error) {
+    console.log(`Warning: Could not load settings: ${error.message}`);
+  }
+  return {};
+}
+
+// Save settings to file
+function saveSettings(settings: { hostname?: string }): void {
+  try {
+    fs.mkdirSync(path.dirname(SETTINGS_FILE), { recursive: true });
+    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
+  } catch (error) {
+    console.log(`Warning: Could not save settings: ${error.message}`);
+  }
+}
 
 class PortalPaths {
   dir: string;
@@ -72,7 +95,7 @@ class PortalPaths {
 function readProjectExtensions(): Extensions {
   const projectName = 'theoldswitcheroo';
   // Use the development directory, not the data directory
-  const projectDir = path.join(__dirname, '..', 'projects', projectName);
+  const projectDir = path.join(LOCAL_DATA_DIR, 'projects', projectName);
   const extensionsFile = path.join(projectDir, 'vscode-extensions.json');
 
   console.log(`DEBUG: readProjectExtensions - extensionsFile: ${extensionsFile}`);
@@ -95,7 +118,7 @@ function readProjectExtensions(): Extensions {
       console.log(`Warning: Could not parse vscode-extensions.json: ${error.message}`);
     }
   }
-  
+
   console.log(`DEBUG: readProjectExtensions - final extensions:`, extensions);
   return extensions;
 }
@@ -295,8 +318,7 @@ class SwitcherooApp {
     await installVSCodeServer(this.hostname, arch);
 
     // Start server
-    const extensions = portal.extensions || readProjectExtensions();
-    const serverInfo = await this.startVSCodeServer(this.hostname, portal.uuid, portal.name, extensions);
+    const serverInfo = await this.startVSCodeServer(this.hostname, portal.uuid, portal.name, portal.extensions);
 
     // Update port on the portal
     portal.port = serverInfo.port;
@@ -390,7 +412,7 @@ class SwitcherooApp {
     const extensions = await this.createPortalDirectory(uuid, name, loadingView);
 
     // Create portal object with no server running yet
-    const portal = new Portal(uuid, name, this.hostname, 0, this);
+    const portal = new Portal(uuid, name, this.hostname, 0, this, extensions);
     portal.extensions = extensions; // Store extensions on portal
     this.portals.push(portal);
 
@@ -413,7 +435,7 @@ class SwitcherooApp {
         this.log(`✓ Portal ${savedPortalDatum.name}: Directory exists`);
 
         // Create portal object with saved port (server status unknown)
-        const portal = new Portal(savedPortalDatum.uuid, savedPortalDatum.name, this.hostname, savedPortalDatum.port, this);
+        const portal = new Portal(savedPortalDatum.uuid, savedPortalDatum.name, this.hostname, savedPortalDatum.port, this, savedPortalDatum.extensions);
         this.portals.push(portal);
       } catch (error) {
         this.log(`✗ Portal ${savedPortalDatum.name}: Directory missing, removing from list`);
@@ -432,7 +454,7 @@ class SwitcherooApp {
   ///
   /// This portal may have been newly created or may have been loaded from disk
   /// and encountered a missing server.
-  async createPortalDirectory(uuid: string, name: string, loadingView: ILoadingView | null = null) {
+  async createPortalDirectory(uuid: string, name: string, loadingView: ILoadingView | null = null): Promise<Extensions> {
     this.log(`Creating directory and project for portal ${name} with uuid ${uuid}...`);
 
     // Test basic SSH connection first
@@ -453,41 +475,11 @@ class SwitcherooApp {
     return extensions;
   }
 
-  ///
-  /// Instantiates a `Portal` object and adds it to `this.portals`.
-  ///
-  /// This portal may have been newly created or may have been loaded from disk
-  /// and encountered a missing server.
-  async finalizePortal(uuid: string, name: string) {
-    this.log(`Setting up remote server for portal ${name} with uuid ${uuid}...`);
-
-    // Detect architecture
-    const archOutput = await execSSHCommand(this.hostname, 'uname -m');
-    const arch = mapArchitecture(String(archOutput).toLowerCase());
-    this.log(`✓ Detected architecture: ${archOutput} -> ${arch}`);
-
-    // Install VSCode server
-    await installVSCodeServer(this.hostname, arch);
-    this.log('✓ VSCode server installation complete');
-
-    // Start server with dynamic port selection
-    const serverInfo = await this.startVSCodeServer(this.hostname, uuid, name);
-    this.log(`✓ VSCode server ${name} ready on port ${serverInfo.port}`);
-
-    const _forwardPid = this.forwardPort(serverInfo.port);
-    this.log(`✓ Forwarding port ${serverInfo.port}`);
-
-    const portal = new Portal(uuid, name, this.hostname, serverInfo.port, this);
-    this.portals.push(portal);
-    return portal;
-  }
-
-  async cloneProjectForPortal(uuid: string, name: string, loadingView: ILoadingView | null = null) {
+  async cloneProjectForPortal(uuid: string, name: string, loadingView: ILoadingView | null = null): Promise<Extensions> {
     // For now, hardcode to theoldswitcheroo project
     const projectName = 'theoldswitcheroo';
     const projectDir = path.join(LOCAL_DATA_DIR, 'projects', projectName);
     const cloneScript = path.join(projectDir, 'fresh-clone.sh');
-    const extensionsFile = path.join(projectDir, 'vscode-extensions.json');
 
     // Check if project definition exists
     if (!fs.existsSync(cloneScript)) {
@@ -719,7 +711,7 @@ class Portal {
   createdAt: Date;
   vscodeView: WebContentsView | null = null;
   metaView: WebContentsView | null = null;
-  extensions?: Extensions;
+  extensions!: Extensions;
 
   /// Create Portal with the given uuid/name running on the given host.
   ///
@@ -729,7 +721,7 @@ class Portal {
   /// verified that the vscode server is actually *running* on that port.
   /// That takes place in `ensureView`. If there is no server, the port
   /// will be reassigned to whatever the fresh server adopts.
-  constructor(uuid: string, name: string, hostname: string, port: number = 0, switcheroo?: SwitcherooApp) {
+  constructor(uuid: string, name: string, hostname: string, port: number = 0, switcheroo: SwitcherooApp, extensions: Extensions) {
     this.uuid = uuid;
     this.name = name;
     this.hostname = hostname;
@@ -738,6 +730,7 @@ class Portal {
     this.createdAt = new Date();
     this.vscodeView = null; // Will be created when first accessed
     this.metaView = null; // Will be created when first accessed
+    this.extensions = extensions;
   }
 
   get vscodeUrl() {
@@ -840,13 +833,27 @@ class LoadingView implements ILoadingView {
 // Get hostname from command line args
 function getHostname() {
   const args = process.argv.slice(2);
-  if (args.length === 0) {
-    console.error('Usage: electron main.js <hostname>');
-    console.error('Example: electron main.js myserver.com');
-    app.quit();
-    process.exit(1);
+
+  // Check for command line hostname first
+  if (args.length > 0) {
+    const hostname = args[0];
+    // Save to settings for future use
+    saveSettings({ hostname });
+    return hostname;
   }
-  return args[0];
+
+  // Fall back to settings file
+  const settings = loadSettings();
+  if (settings.hostname) {
+    return settings.hostname;
+  }
+
+  // No hostname found anywhere
+  console.error('No hostname configured. Either:');
+  console.error('1. Run with: electron main.js <hostname>');
+  console.error('2. Or create ~/.socratic-shell/theoldswitcheroo/settings.json with {"hostname": "your-host"}');
+  app.quit();
+  process.exit(1);
 }
 
 // Execute SSH command using system ssh with ControlMaster
