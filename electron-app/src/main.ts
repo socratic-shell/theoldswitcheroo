@@ -916,7 +916,7 @@ async function execSCP(hostname, localPath, remotePath) {
 }
 
 // Map architecture output to VSCode server architecture
-function mapArchitecture(arch) {
+function mapArchitecture(arch: string): string {
   switch (arch) {
     case 'x86_64':
       return 'linux-x64';
