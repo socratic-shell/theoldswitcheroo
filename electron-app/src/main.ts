@@ -665,7 +665,7 @@ class SwitcherooApp {
   }
 
   // ForSet up port forwarding for the actual port
-  forwardPort(port) {
+  forwardPort(port: number) {
     return spawn('ssh', [
       '-o', 'ControlMaster=auto',
       '-o', `ControlPath=~/.ssh/cm-${this.hostname}`,
