@@ -21,8 +21,25 @@ function portalPaths(uuid) {
     dir: `portals/${uuid}`,
     cloneDir: `portals/${uuid}/clone`,
     serverDataDir: `portals/portal-${uuid}/server-data`,
-    freshCloneSh: `portals/${uuid}/fresh-clone.sh`
+    freshClone: `portals/${uuid}/fresh-clone.sh`
   };
+}
+
+// Helper to read project extensions
+function readProjectExtensions() {
+  const projectName = 'theoldswitcheroo';
+  const projectDir = path.join(LOCAL_DATA_DIR, 'projects', projectName);
+  const extensionsFile = path.join(projectDir, 'vscode-extensions.json');
+  
+  if (fs.existsSync(extensionsFile)) {
+    try {
+      const extensionsData = JSON.parse(fs.readFileSync(extensionsFile, 'utf8'));
+      return extensionsData.extensions || [];
+    } catch (error) {
+      console.log(`Warning: Could not parse vscode-extensions.json: ${error.message}`);
+    }
+  }
+  return [];
 }
 
 // Configure user agent to prevent Electron blocking
@@ -189,7 +206,8 @@ class SwitcherooApp {
     await installVSCodeServer(this.hostname, arch);
 
     // Start server
-    const serverInfo = await this.startVSCodeServer(this.hostname, portal.uuid, portal.name);
+    const extensions = portal.extensions || readProjectExtensions();
+    const serverInfo = await this.startVSCodeServer(this.hostname, portal.uuid, portal.name, extensions);
 
     // Update port on the portal
     portal.port = serverInfo.port;
@@ -280,10 +298,11 @@ class SwitcherooApp {
 
     // Create directory and clone project
     if (loadingView) loadingView.updateMessage(`Creating portal ${name}...`);
-    await this.createPortalDirectory(uuid, name, loadingView);
+    const extensions = await this.createPortalDirectory(uuid, name, loadingView);
 
     // Create portal object with no server running yet
     const portal = new Portal(uuid, name, this.hostname, 0, this);
+    portal.extensions = extensions; // Store extensions on portal
     this.portals.push(portal);
 
     this.notifyPortalsChanged();
@@ -339,8 +358,10 @@ class SwitcherooApp {
     this.log('✓ Remote directory ready');
 
     // Clone project for this portal
-    await this.cloneProjectForPortal(uuid, name, loadingView);
+    const extensions = await this.cloneProjectForPortal(uuid, name, loadingView);
     this.log(`✓ Project cloned for portal ${name}`);
+    
+    return extensions;
   }
 
   ///
@@ -377,10 +398,23 @@ class SwitcherooApp {
     const projectName = 'theoldswitcheroo';
     const projectDir = path.join(LOCAL_DATA_DIR, 'projects', projectName);
     const cloneScript = path.join(projectDir, 'fresh-clone.sh');
+    const extensionsFile = path.join(projectDir, 'vscode-extensions.json');
 
     // Check if project definition exists
     if (!fs.existsSync(cloneScript)) {
       throw new Error(`Project definition not found: ${cloneScript}`);
+    }
+
+    // Read extensions if available
+    let extensions = [];
+    if (fs.existsSync(extensionsFile)) {
+      try {
+        const extensionsData = JSON.parse(fs.readFileSync(extensionsFile, 'utf8'));
+        extensions = extensionsData.extensions || [];
+        this.log(`Found ${extensions.length} extensions to install for ${name}`);
+      } catch (error) {
+        this.log(`Warning: Could not parse vscode-extensions.json: ${error.message}`);
+      }
     }
 
     // Remote target directory for this portal
@@ -400,6 +434,8 @@ class SwitcherooApp {
     // Run the clone script
     if (loadingView) loadingView.updateMessage(`Cloning project for portal ${name}...`);
     await execSSHCommand(this.hostname, `${remoteScriptPath} ${remoteTargetDir}`);
+    
+    return extensions;
   }
 
   // Load portals JSON from disk
@@ -441,11 +477,16 @@ class SwitcherooApp {
   }
 
   /// Start a vscode server process for the given portal, connected to the given uuid, with the given name.
-  startVSCodeServer(hostname, portalUuid, portalName) {
+  startVSCodeServer(hostname, portalUuid, portalName, extensions = []) {
     return new Promise((resolve, reject) => {
       this.log(`Starting SSH with port forwarding for session ${portalName}...`);
 
       const dirs = portalPaths(portalUuid);
+
+      // Build extension install commands
+      const extensionCommands = extensions.length > 0 
+        ? extensions.map(ext => `./openvscode-server/bin/openvscode-server --install-extension ${ext}`).join(' && ')
+        : '';
 
       // Simple server script with auto-shutdown and data directories
       const serverScript = `
@@ -455,6 +496,7 @@ class SwitcherooApp {
         mkdir -p ${dirs.serverDataDir}
         mkdir -p vscode-user-data
         
+        ${extensionCommands ? `# Install extensions\n        ${extensionCommands}\n        ` : ''}
         # Start VSCode with data directories and dynamic port, opening the cloned project
         ./openvscode-server/bin/openvscode-server \\
           --host 0.0.0.0 \\

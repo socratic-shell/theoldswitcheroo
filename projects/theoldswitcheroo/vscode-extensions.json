@@ -1,0 +1,8 @@
+{
+  "extensions": [
+    "rust-lang.rust-analyzer",
+    "ms-vscode.vscode-typescript-next",
+    "esbenp.prettier-vscode",
+    "bradlc.vscode-tailwindcss"
+  ]
+}
