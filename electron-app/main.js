@@ -37,8 +37,7 @@ async function main() {
     return;
   }
 
-  let app = new SwitcherooApp(hostname);
-  await app.bootUp();
+  await new SwitcherooApp(hostname).bootUp();
 }
 
 app.whenReady().then(() => {
@@ -382,11 +381,15 @@ class SwitcherooApp {
     }
 
     // Remote target directory for this portal
-    const portalPaths = portalPaths(uuid);
-    const remoteTargetDir = `${BASE_DIR}/${portalPaths.cloneDir}`;
+    const paths = portalPaths(uuid);
+    const remoteTargetDir = `${BASE_DIR}/${paths.cloneDir}`;
+
+    // Create portal directory structure
+    await execSSHCommand(this.hostname, `mkdir -p ${BASE_DIR}/${paths.dir}`);
 
     // Upload the clone script to portal directory
-    await execSCP(this.hostname, cloneScript, `${BASE_DIR}/${portalPaths.freshCloneSh}`);
+    const remoteScriptPath = `${BASE_DIR}/${paths.freshClone}`;
+    await execSCP(this.hostname, cloneScript, remoteScriptPath);
     await execSSHCommand(this.hostname, `chmod +x ${remoteScriptPath}`);
 
     // Run the clone script
