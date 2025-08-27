@@ -19,8 +19,7 @@ function portalDirectories(uuid) {
   return {
     dir: `portals/${uuid}`,
     cloneDir: `portals/${uuid}/clone`,
-    serverDataDir: `portals/portal-${uuid}/server-data`,
-    vscodeUserDataDir: `vscode-user-data`
+    serverDataDir: `portals/portal-${uuid}/server-data`
   };
 }
 
@@ -445,13 +444,13 @@ class SwitcherooApp {
         
         # Create session-specific directories
         mkdir -p ${dirs.serverDataDir}
-        mkdir -p ${dirs.vscodeUserDataDir}
+        mkdir -p vscode-user-data
         
         # Start VSCode with data directories and dynamic port, opening the cloned project
         ./openvscode-server/bin/openvscode-server \\
           --host 0.0.0.0 \\
           --port 0 \\
-          --user-data-dir ${BASE_DIR}/${dirs.vscodeUserDataDir} \\
+          --user-data-dir ${BASE_DIR}/vscode-user-data \\
           --server-data-dir ${BASE_DIR}/${dirs.serverDataDir} \\
           --without-connection-token \\
           --enable-remote-auto-shutdown \\
