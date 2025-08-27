@@ -885,7 +885,7 @@ async function execSSHCommand(hostname, command) {
 }
 
 // Upload file using scp with ControlMaster
-async function execSCP(hostname, localPath, remotePath) {
+async function execSCP(hostname: string, localPath: string, remotePath: string): Promise<void> {
   return new Promise((resolve, reject) => {
     console.log("execSCP: ", localPath, "->", `${hostname}:${remotePath}`);
     const scp = spawn('scp', [
