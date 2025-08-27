@@ -16,16 +16,17 @@
       font-family: system-ui;
     }
 
-    .sessions-container {
+    .portals-container {
       flex: 1;
-      padding: 30px 10px 10px 10px; /* Top padding for traffic light buttons */
+      padding: 30px 10px 10px 10px;
+      /* Top padding for traffic light buttons */
       overflow-y: auto;
       display: flex;
       flex-direction: column;
       gap: 8px;
     }
 
-    .session-box {
+    .portal-box {
       width: 55px;
       height: 40px;
       background: #007acc;
@@ -39,7 +40,7 @@
       flex-shrink: 0;
     }
 
-    .session-box.active {
+    .portal-box.active {
       background: #40a6ff;
     }
 
@@ -78,15 +79,15 @@
     }
 
     /* Custom scrollbar */
-    .sessions-container::-webkit-scrollbar {
+    .portals-container::-webkit-scrollbar {
       width: 4px;
     }
 
-    .sessions-container::-webkit-scrollbar-track {
+    .portals-container::-webkit-scrollbar-track {
       background: transparent;
     }
 
-    .sessions-container::-webkit-scrollbar-thumb {
+    .portals-container::-webkit-scrollbar-thumb {
       background: #464647;
       border-radius: 2px;
     }
@@ -130,10 +131,10 @@
 </head>
 
 <body>
-  <div class="sessions-container" id="sessions-container">
-    <!-- Sessions will be populated dynamically -->
+  <div class="portals-container" id="portals-container">
+    <!-- portals will be populated dynamically -->
   </div>
-  
+
   <div class="bottom-toolbar">
     <button class="toolbar-button" id="settings-button">⚙</button>
     <button class="toolbar-button add-button" id="add-button">+</button>
@@ -141,122 +142,67 @@
 
   <script>
     const { ipcRenderer } = require('electron');
-    
-    // Handle session updates from main process
-    ipcRenderer.on('update-sessions', (event, data) => {
-      updateSessionsUI(data.sessions, data.activeSessionId);
+
+    // Handle portal updates from main process
+    ipcRenderer.on('update-portals', (event, data) => {
+      updatePortalsUI(data.portalData, data.activePortalUuid);
     });
-    
-    // Update the sessions UI
-    function updateSessionsUI(sessions, activeSessionId) {
-      const container = document.getElementById('sessions-container');
+
+    // Update the portals UI
+    function updatePortalsUI(portalData, activePortalUuid) {
+      const container = document.getElementById('portals-container');
       container.innerHTML = '';
-      
-      sessions.forEach(session => {
-        const sessionBox = document.createElement('div');
-        sessionBox.className = `session-box ${session.active ? 'active' : ''}`;
-        sessionBox.textContent = session.id;
-        sessionBox.dataset.sessionId = session.id;
-        
-        // Add click handler for session switching
-        sessionBox.addEventListener('click', () => switchToSession(session.id));
-        
+
+      portalData.forEach(portalDatum => {
+        const portalBox = document.createElement('div');
+        portalBox.className = `portal-box ${portalDatum.active ? 'active' : ''}`;
+        portalBox.textContent = portalDatum.name;
+        portalBox.dataset.portalUuid = portalDatum.uuid;
+
+        // Add click handler for portal switching
+        portalBox.addEventListener('click', () => switchToPortal(portalDatum.uuid));
+
         // Add right-click handler for meta-view
-        sessionBox.addEventListener('contextmenu', (e) => {
+        portalBox.addEventListener('contextmenu', (e) => {
           e.preventDefault();
-          showMetaView(session.id);
+          toggleView(portalDatum.uuid);
+          switchToPortal(portalDatum.uuid);
         });
-        
-        container.appendChild(sessionBox);
+
+        container.appendChild(portalBox);
       });
     }
 
-    let currentContextSessionId = null;
-
-    // Show context menu
-    function showContextMenu(x, y, sessionId) {
-      currentContextSessionId = sessionId;
-      const contextMenu = document.getElementById('context-menu');
-      contextMenu.style.display = 'block';
-      
-      // Position menu centered horizontally, below the click point
-      contextMenu.style.left = '10px'; // Centered in 75px sidebar (with some margin)
-      contextMenu.style.top = (y + 10) + 'px'; // Slightly below the click
-    }
-
-    // Hide context menu
-    function hideContextMenu() {
-      document.getElementById('context-menu').style.display = 'none';
-      currentContextSessionId = null;
-    }
-
-    // Hide context menu when clicking elsewhere
-    document.addEventListener('click', hideContextMenu);
-
-    // Handle kill session
-    document.getElementById('kill-session').addEventListener('click', async () => {
-      if (currentContextSessionId) {
-        try {
-          const result = await ipcRenderer.invoke('kill-session', currentContextSessionId);
-          if (!result.success) {
-            alert(`Failed to kill session: ${result.error}`);
-          }
-        } catch (error) {
-          alert(`Error: ${error.message}`);
-        }
-      }
-      hideContextMenu();
-    });
-
-    // Handle kill others
-    document.getElementById('kill-others').addEventListener('click', async () => {
-      if (currentContextSessionId) {
-        try {
-          const result = await ipcRenderer.invoke('kill-others', currentContextSessionId);
-          if (result.success) {
-            console.log(`Killed ${result.killedCount} other sessions, kept session ${result.keptSessionId}`);
-          } else {
-            alert(`Failed to kill other sessions: ${result.error}`);
-          }
-        } catch (error) {
-          alert(`Error: ${error.message}`);
-        }
-      }
-      hideContextMenu();
-    });
-    
-    // Show meta-view for session
-    async function showMetaView(sessionId) {
+    // Toggle between regular and meta view for portal
+    async function toggleView(portalUuid) {
       try {
-        const result = await ipcRenderer.invoke('show-meta-view', sessionId);
+        const result = await ipcRenderer.invoke('toggle-view', portalUuid);
         if (!result.success) {
-          alert(`Failed to show meta-view: ${result.error}`);
+          alert(`Failed to toggle view: ${result.error}`);
         }
       } catch (error) {
         alert(`Error: ${error.message}`);
       }
     }
-    
+
     // Handle + button clicks
     document.getElementById('add-button').addEventListener('click', async () => {
       console.log('+ button clicked in sidebar');
-      
+
       // Disable button during creation
       const addButton = document.getElementById('add-button');
       addButton.disabled = true;
       addButton.textContent = '...';
-      
+
       try {
-        const result = await ipcRenderer.invoke('create-session');
+        const result = await ipcRenderer.invoke('create-portal');
         console.log('IPC result:', result);
-        
+
         if (result.success) {
-          // Add new session box to UI
-          addSessionBox(result.session.id);
-          console.log(`Added session ${result.session.id} to UI`);
+          console.log(`Added portal with uuid=${result.uuid} and name=${result.name}`);
         } else {
-          console.error('Session creation failed:', result.error);
-          alert(`Failed to create session: ${result.error}`);
+          console.error('portal creation failed:', result.error);
+          alert(`Failed to create portal: ${result.error}`);
         }
       } catch (error) {
         console.error('IPC error:', error);
@@ -267,58 +213,35 @@
         addButton.textContent = '+';
       }
     });
-    
-    // Function to add a new session box
-    function addSessionBox(sessionId) {
-      const sessionsContainer = document.querySelector('.sessions-container');
-      const newSessionBox = document.createElement('div');
-      newSessionBox.className = 'session-box';
-      newSessionBox.textContent = sessionId;
-      newSessionBox.dataset.sessionId = sessionId;
-      
-      // Add click handler for session switching
-      newSessionBox.addEventListener('click', () => switchToSession(sessionId));
-      
-      sessionsContainer.appendChild(newSessionBox);
-    }
-    
-    // Function to switch sessions
-    async function switchToSession(sessionId) {
-      console.log(`Switching to session ${sessionId}`);
-      
+
+    // Function to switch portals
+    async function switchToPortal(portalUuid) {
+      console.log(`Switching to portal ${portalUuid}`);
+
       try {
-        const result = await ipcRenderer.invoke('switch-session', sessionId);
-        
+        const result = await ipcRenderer.invoke('switch-portal', portalUuid);
+
         if (result.success) {
-          // Update UI to show active session
-          document.querySelectorAll('.session-box').forEach(box => {
+          // Update UI to show active portal
+          document.querySelectorAll('.portal-box').forEach(box => {
             box.classList.remove('active');
           });
-          
-          const activeBox = document.querySelector(`[data-session-id="${sessionId}"]`);
+
+          const activeBox = document.querySelector(`[data-portal-id="${portalUuid}"]`);
           if (activeBox) {
             activeBox.classList.add('active');
           }
-          
-          console.log(`Switched to session ${sessionId}`);
+
+          console.log(`Switched to portal ${portalUuid}`);
         } else {
-          console.error('Session switch failed:', result.error);
-          alert(`Failed to switch session: ${result.error}`);
+          console.error('portal switch failed:', result.error);
+          alert(`Failed to switch portal: ${result.error}`);
         }
       } catch (error) {
-        console.error('Session switch error:', error);
+        console.error('portal switch error:', error);
         alert(`Error: ${error.message}`);
       }
     }
-    
-    // Add click handler to existing session 1 box
-    document.addEventListener('DOMContentLoaded', () => {
-      const session1Box = document.querySelector('.session-box');
-      if (session1Box) {
-        session1Box.dataset.sessionId = '1';
-        session1Box.addEventListener('click', () => switchToSession(1));
-      }
-    });
   </script>
 </body>
 

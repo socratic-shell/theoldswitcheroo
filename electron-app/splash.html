@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <meta charset="UTF-8">
     <title>Connecting...</title>
@@ -17,20 +18,20 @@
             height: 100vh;
             overflow: hidden;
         }
-        
+
         .logo {
             font-size: 24px;
             font-weight: 300;
             margin-bottom: 40px;
             color: #007acc;
         }
-        
+
         .status {
             font-size: 16px;
             margin-bottom: 30px;
             text-align: center;
         }
-        
+
         .log-container {
             width: 500px;
             height: 200px;
@@ -43,51 +44,51 @@
             line-height: 1.4;
             margin-bottom: 20px;
         }
-        
+
         .log-messages {
             height: 100%;
             overflow: hidden;
         }
-        
+
         .log-message {
             margin-bottom: 4px;
             opacity: 0;
             transform: translateY(10px);
             animation: slideIn 0.3s ease forwards;
         }
-        
+
         .log-message.current {
             color: #ffffff;
         }
-        
+
         .log-message.completed {
             color: #4caf50;
         }
-        
+
         .log-message.old {
             color: #666666;
             opacity: 0.6;
         }
-        
+
         @keyframes slideIn {
             to {
                 opacity: 1;
                 transform: translateY(0);
             }
         }
-        
+
         .sessions {
             max-width: 400px;
             width: 100%;
         }
-        
+
         .session-item {
             display: flex;
             align-items: center;
             padding: 8px 0;
             font-size: 14px;
         }
-        
+
         .session-status {
             width: 16px;
             height: 16px;
@@ -95,77 +96,83 @@
             margin-right: 12px;
             background: #666;
         }
-        
+
         .session-status.connecting {
             background: #ffa500;
             animation: pulse 1.5s infinite;
         }
-        
+
         .session-status.connected {
             background: #4caf50;
         }
-        
+
         .session-status.restarting {
             background: #ff9800;
             animation: pulse 1.5s infinite;
         }
-        
+
         .session-status.error {
             background: #f44336;
         }
-        
+
         @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
+            0% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+
+            100% {
+                opacity: 1;
+            }
         }
     </style>
 </head>
+
 <body>
-    <div class="logo">theoldswitcheroo</div>
+    <div class="logo">the old switcheroo</div>
     <div class="status" id="main-status">Connecting to <span id="hostname">...</span></div>
-    
+
     <div class="log-container">
         <div class="log-messages" id="log-messages"></div>
     </div>
-    
+
     <div class="sessions" id="sessions"></div>
 
     <script>
         const { ipcRenderer } = require('electron');
-        
+
         let logMessages = [];
         const maxMessages = 5;
 
-        console.log("XXXX");
-
         // Update hostname
         ipcRenderer.on('splash-hostname', (event, hostname) => {
-            console.log("SPLASH HOSTNAME");
             document.getElementById('hostname').textContent = hostname;
         });
-        
+
         // Add log message
         ipcRenderer.on('splash-log', (event, message) => {
             logMessages.push(message);
-            
+
             // Keep only the last maxMessages
             if (logMessages.length > maxMessages) {
                 logMessages = logMessages.slice(-maxMessages);
             }
-            
+
             updateLogDisplay();
         });
-        
+
         function updateLogDisplay() {
             const container = document.getElementById('log-messages');
             container.innerHTML = '';
-            
+
             logMessages.forEach((message, index) => {
                 const div = document.createElement('div');
                 div.className = 'log-message';
                 div.textContent = message;
-                
+
                 // Most recent message is current (white)
                 if (index === logMessages.length - 1) {
                     div.classList.add('current');
@@ -176,26 +183,26 @@
                     // Older messages fade to grey
                     div.classList.add('old');
                 }
-                
+
                 container.appendChild(div);
             });
         }
-        
+
         // Update session list
         ipcRenderer.on('splash-sessions', (event, sessions) => {
             const container = document.getElementById('sessions');
             container.innerHTML = '';
-            
+
             sessions.forEach(session => {
                 const item = document.createElement('div');
                 item.className = 'session-item';
-                
+
                 const status = document.createElement('div');
                 status.className = `session-status ${session.status}`;
-                
+
                 const text = document.createElement('span');
                 text.textContent = `Session ${session.id}: ${session.message}`;
-                
+
                 item.appendChild(status);
                 item.appendChild(text);
                 container.appendChild(item);
@@ -203,4 +210,5 @@
         });
     </script>
 </body>
+
 </html>
