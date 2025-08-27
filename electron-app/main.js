@@ -296,7 +296,8 @@ class SwitcherooApp {
       this.log(`Checking portal ${savedPortalDatum.name}...`);
 
       // Check if portal clone directory still exists
-      const portalCloneDir = `${BASE_DIR}/${portalDirectories(savedPortalDatum.uuid).cloneDir}`;
+      const portalDirs = portalDirectories(savedPortalDatum.uuid);
+      const portalCloneDir = `${BASE_DIR}/${portalDirs.cloneDir}`;
       try {
         await execSSHCommand(this.hostname, `test -d ${portalCloneDir}`);
         this.log(`✓ Portal ${savedPortalDatum.name}: Directory exists`);
@@ -379,18 +380,17 @@ class SwitcherooApp {
     }
 
     // Remote target directory for this portal
-    const remoteTargetDir = `${BASE_DIR}/${portalDirectories(uuid).cloneDir}`;
+    const portalDirs = portalDirectories(uuid);
+    const remoteTargetDir = `${BASE_DIR}/${portalDirs.cloneDir}`;
 
-    // Upload the clone script to remote
-    const remoteScriptPath = `${BASE_DIR}/fresh-clone-${uuid}.sh`;
+    // Upload the clone script to portal directory
+    const dirs = portalDirectories(uuid);
+    const remoteScriptPath = `${BASE_DIR}/${dirs.dir}/fresh-clone.sh`;
     await execSCP(this.hostname, cloneScript, remoteScriptPath);
     await execSSHCommand(this.hostname, `chmod +x ${remoteScriptPath}`);
 
-    // Run the clone script on remote
+    // Run the clone script
     await execSSHCommand(this.hostname, `${remoteScriptPath} ${remoteTargetDir}`);
-
-    // Clean up the temporary script
-    await execSSHCommand(this.hostname, `rm ${remoteScriptPath}`);
   }
 
   // Load portals JSON from disk
