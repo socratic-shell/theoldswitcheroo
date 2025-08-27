@@ -287,10 +287,10 @@ class SwitcherooApp {
     for (const savedPortalDatum of savedPortalData.portals) {
       this.log(`Checking portal ${savedPortalDatum.name}...`);
 
-      // Check if portal directory still exists
-      const portalDir = `${BASE_DIR}/portals/${savedPortalDatum.uuid}`;
+      // Check if portal project directory still exists
+      const portalProjectDir = `${BASE_DIR}/portals/${savedPortalDatum.uuid}/project-data`;
       try {
-        await execSSHCommand(this.hostname, `test -d ${portalDir}`);
+        await execSSHCommand(this.hostname, `test -d ${portalProjectDir}`);
         this.log(`✓ Portal ${savedPortalDatum.name}: Directory exists`);
 
         // Create portal object with saved port (server status unknown)
@@ -371,7 +371,7 @@ class SwitcherooApp {
     }
 
     // Remote target directory for this portal
-    const remoteTargetDir = `${BASE_DIR}/portals/${uuid}`;
+    const remoteTargetDir = `${BASE_DIR}/portals/${uuid}/project-data`;
 
     // Upload the clone script to remote
     const remoteScriptPath = `${BASE_DIR}/fresh-clone-${uuid}.sh`;
@@ -429,7 +429,7 @@ class SwitcherooApp {
       this.log(`Starting SSH with port forwarding for session ${portalName}...`);
 
       const portalDir = `portals/portal-${portalUuid}`;
-      const projectDir = `portals/${portalUuid}`; // This is where the project was cloned
+      const projectDir = `portals/${portalUuid}/project-data`; // This is where the project was cloned
 
       // Simple server script with auto-shutdown and data directories
       const serverScript = `
