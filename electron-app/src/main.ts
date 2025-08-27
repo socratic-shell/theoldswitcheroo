@@ -930,7 +930,7 @@ function mapArchitecture(arch: string): string {
 }
 
 // Install VSCode server
-async function installVSCodeServer(hostname, arch) {
+async function installVSCodeServer(hostname: string, arch: string): Promise<void> {
   console.log(`Installing openvscode-server for ${arch}...`);
 
   const installScript = `
