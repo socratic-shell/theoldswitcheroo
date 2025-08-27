@@ -131,7 +131,7 @@ class SwitcherooApp {
     if (this.portals.length == 0) {
       this.loadingView.updateMessage('Creating initial portal...');
       this.log(`Creating initial portal`);
-      const portal = await this.createNewPortal();
+      const portal = await this.createNewPortal(this.loadingView);
       this.log(`✓ Portal ${portal.name}: Started on port ${portal.port}`);
     }
 
@@ -274,12 +274,13 @@ class SwitcherooApp {
     return { success: true };
   }
 
-  async createNewPortal() {
+  async createNewPortal(loadingView = null) {
     const uuid = generateUUID();
     const name = `P${this.portals.length}`;
 
     // Create directory and clone project
-    await this.createPortalDirectory(uuid, name);
+    if (loadingView) loadingView.updateMessage(`Creating portal ${name}...`);
+    await this.createPortalDirectory(uuid, name, loadingView);
 
     // Create portal object with no server running yet
     const portal = new Portal(uuid, name, this.hostname, 0, this);
@@ -323,20 +324,22 @@ class SwitcherooApp {
   ///
   /// This portal may have been newly created or may have been loaded from disk
   /// and encountered a missing server.
-  async createPortalDirectory(uuid, name) {
+  async createPortalDirectory(uuid, name, loadingView = null) {
     this.log(`Creating directory and project for portal ${name} with uuid ${uuid}...`);
 
     // Test basic SSH connection first
+    if (loadingView) loadingView.updateMessage(`Testing SSH connection for ${name}...`);
     this.log('Testing SSH connection...');
     await execSSHCommand(this.hostname, 'echo "SSH connection successful"');
     this.log('✓ SSH connection test successful');
 
     // Setup remote directory
+    if (loadingView) loadingView.updateMessage(`Setting up remote directory for ${name}...`);
     await execSSHCommand(this.hostname, `mkdir -p ${BASE_DIR}/`);
     this.log('✓ Remote directory ready');
 
     // Clone project for this portal
-    await this.cloneProjectForPortal(uuid, name);
+    await this.cloneProjectForPortal(uuid, name, loadingView);
     this.log(`✓ Project cloned for portal ${name}`);
   }
 
@@ -369,7 +372,7 @@ class SwitcherooApp {
     return portal;
   }
 
-  async cloneProjectForPortal(uuid, name) {
+  async cloneProjectForPortal(uuid, name, loadingView = null) {
     // For now, hardcode to theoldswitcheroo project
     const projectName = 'theoldswitcheroo';
     const projectDir = path.join(LOCAL_DATA_DIR, 'projects', projectName);
@@ -385,14 +388,17 @@ class SwitcherooApp {
     const remoteTargetDir = `${BASE_DIR}/${paths.cloneDir}`;
 
     // Create portal directory structure
+    if (loadingView) loadingView.updateMessage(`Creating portal ${name} directory...`);
     await execSSHCommand(this.hostname, `mkdir -p ${BASE_DIR}/${paths.dir}`);
 
     // Upload the clone script to portal directory
+    if (loadingView) loadingView.updateMessage(`Uploading clone script for ${name}...`);
     const remoteScriptPath = `${BASE_DIR}/${paths.freshClone}`;
     await execSCP(this.hostname, cloneScript, remoteScriptPath);
     await execSSHCommand(this.hostname, `chmod +x ${remoteScriptPath}`);
 
     // Run the clone script
+    if (loadingView) loadingView.updateMessage(`Cloning project for portal ${name}...`);
     await execSSHCommand(this.hostname, `${remoteScriptPath} ${remoteTargetDir}`);
   }
 
