@@ -5,7 +5,7 @@
   "type": "module",
   "main": "daemon.ts",
   "scripts": {
-    "build": "node build.js",
+    "build": "tsx build.ts",
     "test": "jest",
     "test:watch": "jest --watch",
     "dev": "tsx daemon.ts"
