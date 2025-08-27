@@ -47,7 +47,6 @@ class SwitcherooApp {
     this.portals = [];
     this.activePortalUuid = null;
     this.hostname = hostname;
-    this.splash = new SplashScreen(hostname);
     this.loadingView = new LoadingView();
 
     // Create a persistent session for this hostname (shared across all sessions)
@@ -96,26 +95,32 @@ class SwitcherooApp {
   }
 
   async bootUp() {
-    await this.splash.bootUp(this.hostname);
-
+    // Show main window immediately with loading view
+    this.setMainView(this.loadingView.getView());
+    this.mainWindow.show();
+    
     // Initialize the sidebar HTML and wait for it to load.
+    this.loadingView.updateMessage('Loading interface...');
     this.sidebarView.webContents.loadFile('sidebar.html');
     await new Promise(resolve => {
       this.sidebarView.webContents.once('did-finish-load', resolve);
     });
 
     // Load existing portals
+    this.loadingView.updateMessage('Checking for existing portals...');
     this.log('Checking for existing portals...');
     const savedPortalData = this.loadPortalData();
 
     // If there is savedData, restore it
     if (savedPortalData.hostname === this.hostname && savedPortalData.portals.length > 0) {
+      this.loadingView.updateMessage('Restoring saved portals...');
       await this.restoreSavedPortals(savedPortalData);
       this.notifyPortalsChanged();
     }
 
     // Make sure there is at least one portal
     if (this.portals.length == 0) {
+      this.loadingView.updateMessage('Creating initial portal...');
       this.log(`Creating initial portal`);
       const portal = await this.createNewPortal();
       this.log(`✓ Portal ${portal.name}: Started on port ${portal.port}`);
@@ -127,12 +132,8 @@ class SwitcherooApp {
     }
 
     // Select the active portal
+    this.loadingView.updateMessage('Loading VSCode...');
     await this.switchPortal(this.portalWithUuid(this.activePortalUuid));
-
-    // Close the splash window and display the main window
-    this.splash.close();
-    this.splash = null;
-    this.mainWindow.show();
   }
 
   /// Replace the "main view" in our app with `view`
@@ -154,12 +155,9 @@ class SwitcherooApp {
     this.updateViewBounds();
   }
 
-  /// Log to the splash console during initialize and console otherwise
+  /// Log messages to console
   log(message) {
     console.log(message);
-    if (this.splash) {
-      this.splash.log(message);
-    }
   }
 
   /// Handles a new session message from the sidebar
@@ -572,62 +570,6 @@ class LoadingView {
 
   getView() {
     return this.view;
-  }
-}
-
-class SplashScreen {
-  constructor() {
-    this.splashWindow = new BaseWindow({
-      width: 500,
-      height: 400,
-      show: false,
-      frame: false,
-      backgroundColor: '#1e1e1e',
-      center: true,
-      resizable: false
-    });
-
-    this.splashView = new WebContentsView({
-      webPreferences: {
-        nodeIntegration: true,
-        contextIsolation: false
-      }
-    });
-
-    this.splashWindow.contentView.addChildView(this.splashView);
-    this.splashView.setBounds({ x: 0, y: 0, width: 500, height: 400 });
-
-    this.splashView.webContents.loadFile('splash.html');
-
-    this.splashView.webContents.once('did-finish-load', () => {
-      this.splashWindow.show();
-    });
-  }
-
-  async bootUp(hostname) {
-    // Wait for splash to load before updating it
-    await new Promise(resolve => {
-      this.webContents.once('did-finish-load', resolve);
-    });
-
-    this.webContents.postMessage('splash-hostname', hostname);
-  }
-
-  get webContents() {
-    return this.splashView.webContents;
-  }
-
-
-  updateSessions(hostname) {
-    this.webContents.postMessage('splash-sessions', hostname);
-  }
-
-  log(message) {
-    this.webContents.postMessage('splash-log', message);
-  }
-
-  close() {
-    this.splashWindow.close();
   }
 }
 
