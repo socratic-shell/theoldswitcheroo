@@ -29,21 +29,23 @@ Key:
 
 ## Open VSCode Server
 
-* Installed from github (gitpod.io release) onto the remote desktop
-* Runs for each session
+* [x] Installed from github (gitpod.io release) onto the remote desktop
+* [x] Runs for each session
 
-## Setting up a new portal
-## theoldswitcheroo-daemon
+## IPC communication daemon
 
-## theoldswitcheroo-daemon
+* [ ] Receives messages from tools running in portals
 
-* Daemon
+## Portal CLI tools
 
-* Electron app (runs on user's machine)
-    * Loads project description
-    * 
-* Project
-* IPC bus
-    * Receives messages from the electron app or from servers and CLI running on the remote host
-    * 
+* [ ] Tool to spawn a new process
+
+## Setting up the project directory
+
+* [x] Install the VSCode server (do we need a copy in *each portal*)
+
+## Setting up a portal
+
+* [x] Clone the project
+* [x] 
 

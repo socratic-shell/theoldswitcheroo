@@ -13,6 +13,8 @@
 
 <!-- Describes how we manage the SSH connection(s) to the host -->
 - [SSH connection handling](./ssh-connection-handling.md)
+<!-- Describes the daemon-based communication system between portals and Electron app -->
+- [Portal communication architecture](./portal-communication-architecture.md)
 
 # Reference Material
 
