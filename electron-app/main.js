@@ -454,7 +454,7 @@ class SwitcherooApp {
           --server-data-dir ${BASE_DIR}/${dirs.serverDataDir} \\
           --without-connection-token \\
           --enable-remote-auto-shutdown \\
-          ${BASE_DIR}/${dirs.cloneDir} 2>&1
+          --folder ${BASE_DIR}/${dirs.cloneDir} 2>&1
       `;
 
       console.log(serverScript);
