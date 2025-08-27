@@ -15,6 +15,23 @@ function generateUUID() {
 const PORTALS_FILE = path.join(os.homedir(), '.socratic-shell', 'theoldswitcheroo', 'portals.json');
 const BASE_DIR = "~/.socratic-shell/theoldswitcheroo";
 
+// Path helper functions
+function getPortalDir(uuid) {
+  return `${BASE_DIR}/portals/${uuid}`;
+}
+
+function getPortalCloneDir(uuid) {
+  return `${BASE_DIR}/portals/${uuid}/clone`;
+}
+
+function getPortalServerDataDir(uuid) {
+  return `${BASE_DIR}/portals/portal-${uuid}/server-data`;
+}
+
+function getVSCodeUserDataDir() {
+  return `${BASE_DIR}/vscode-user-data`;
+}
+
 // Configure user agent to prevent Electron blocking
 const STANDARD_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
@@ -288,7 +305,7 @@ class SwitcherooApp {
       this.log(`Checking portal ${savedPortalDatum.name}...`);
 
       // Check if portal clone directory still exists
-      const portalCloneDir = `${BASE_DIR}/portals/${savedPortalDatum.uuid}/clone`;
+      const portalCloneDir = getPortalCloneDir(savedPortalDatum.uuid);
       try {
         await execSSHCommand(this.hostname, `test -d ${portalCloneDir}`);
         this.log(`✓ Portal ${savedPortalDatum.name}: Directory exists`);
@@ -371,7 +388,7 @@ class SwitcherooApp {
     }
 
     // Remote target directory for this portal
-    const remoteTargetDir = `${BASE_DIR}/portals/${uuid}/clone`;
+    const remoteTargetDir = getPortalCloneDir(uuid);
 
     // Upload the clone script to remote
     const remoteScriptPath = `${BASE_DIR}/fresh-clone-${uuid}.sh`;
@@ -429,25 +446,25 @@ class SwitcherooApp {
       this.log(`Starting SSH with port forwarding for session ${portalName}...`);
 
       const portalDir = `portals/portal-${portalUuid}`;
-      const projectDir = `portals/${portalUuid}/clone`; // This is where the project was cloned
+      const projectDir = getPortalCloneDir(portalUuid).replace(`${BASE_DIR}/`, ''); // Remove BASE_DIR prefix for relative path
 
       // Simple server script with auto-shutdown and data directories
       const serverScript = `
         cd ${BASE_DIR}
         
         # Create session-specific directories
-        mkdir -p ${portalDir}/server-data
-        mkdir -p vscode-user-data
+        mkdir -p ${getPortalServerDataDir(portalUuid).replace(`${BASE_DIR}/`, '')}
+        mkdir -p ${getVSCodeUserDataDir().replace(`${BASE_DIR}/`, '')}
         
         # Start VSCode with data directories and dynamic port, opening the cloned project
         ./openvscode-server/bin/openvscode-server \\
           --host 0.0.0.0 \\
           --port 0 \\
-          --user-data-dir ${BASE_DIR}/vscode-user-data \\
-          --server-data-dir ${BASE_DIR}/${portalDir}/server-data \\
+          --user-data-dir ${getVSCodeUserDataDir()} \\
+          --server-data-dir ${getPortalServerDataDir(portalUuid)} \\
           --without-connection-token \\
           --enable-remote-auto-shutdown \\
-          ${BASE_DIR}/${projectDir} 2>&1
+          ${getPortalCloneDir(portalUuid)} 2>&1
       `;
 
       console.log(serverScript);
