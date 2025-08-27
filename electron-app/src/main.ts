@@ -956,7 +956,7 @@ async function checkPortalHealth(hostname: string, port: number): Promise<boolea
 }
 
 // Wait for a URL to be accessible for up to `maxRetries` attempts
-async function waitForServer(url, maxRetries = 10) {
+async function waitForServer(url: string, maxRetries: number = 10): Promise<boolean> {
   for (let retries = 0; retries < maxRetries; retries++) {
     try {
       const response = await new Promise((resolve, reject) => {
