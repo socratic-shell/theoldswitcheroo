@@ -1,5 +1,6 @@
 {
   "extensions": [
-    "rust-lang.rust-analyzer"
+    "rust-lang.rust-analyzer",
+    "ms-vscode.vscode-typescript-next"
   ]
 }
