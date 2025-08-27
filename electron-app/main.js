@@ -21,6 +21,7 @@ function portalPaths(uuid) {
     dir: `portals/${uuid}`,
     cloneDir: `portals/${uuid}/clone`,
     serverDataDir: `portals/portal-${uuid}/server-data`,
+    extensionsDir: `portals/portal-${uuid}/extensions`,
     freshClone: `portals/${uuid}/fresh-clone.sh`
   };
 }
@@ -506,19 +507,31 @@ class SwitcherooApp {
   }
 
   /// Start a vscode server process for the given portal, connected to the given uuid, with the given name.
-  startVSCodeServer(hostname, portalUuid, portalName, extensions = { marketplace: [], local: [] }) {
+  async startVSCodeServer(hostname, portalUuid, portalName, extensions = { marketplace: [], local: [] }) {
+    this.log(`Starting SSH with port forwarding for session ${portalName}...`);
+
+    // Upload local extensions if any
+    if (extensions.local && extensions.local.length > 0) {
+      console.log(`Uploading custom extensions...`);
+      for (const localExt of extensions.local) {
+        const localPath = path.resolve(LOCAL_DATA_DIR, 'projects', 'theoldswitcheroo', localExt);
+        const remotePath = `${BASE_DIR}/${path.basename(localExt)}`;
+        console.log(`Uploading ${localPath} to ${remotePath}`);
+        await execSCP(hostname, localPath, remotePath);
+      }
+    }
+
     return new Promise((resolve, reject) => {
-      this.log(`Starting SSH with port forwarding for session ${portalName}...`);
 
       const dirs = portalPaths(portalUuid);
 
       // Build extension install commands
       const marketplaceCommands = extensions.marketplace?.length > 0 
-        ? extensions.marketplace.map(ext => `./openvscode-server/bin/openvscode-server --install-extension ${ext}`).join(' && ')
+        ? extensions.marketplace.map(ext => `./openvscode-server/bin/openvscode-server --extensions-dir ${BASE_DIR}/${dirs.extensionsDir} --install-extension ${ext}`).join(' && ')
         : '';
       
       const localCommands = extensions.local?.length > 0
-        ? extensions.local.map(ext => `./openvscode-server/bin/openvscode-server --install-extension ${ext}`).join(' && ')
+        ? extensions.local.map(ext => `./openvscode-server/bin/openvscode-server --extensions-dir ${BASE_DIR}/${dirs.extensionsDir} --install-extension ${BASE_DIR}/${path.basename(ext)}`).join(' && ')
         : '';
       
       const allExtensionCommands = [marketplaceCommands, localCommands].filter(cmd => cmd).join(' && ');
@@ -529,6 +542,7 @@ class SwitcherooApp {
         
         # Create session-specific directories
         mkdir -p ${dirs.serverDataDir}
+        mkdir -p ${dirs.extensionsDir}
         mkdir -p vscode-user-data
         
         ${allExtensionCommands ? `# Install extensions\n        ${allExtensionCommands}\n        ` : ''}
@@ -538,6 +552,7 @@ class SwitcherooApp {
           --port 0 \\
           --user-data-dir ${BASE_DIR}/vscode-user-data \\
           --server-data-dir ${BASE_DIR}/${dirs.serverDataDir} \\
+          --extensions-dir ${BASE_DIR}/${dirs.extensionsDir} \\
           --without-connection-token \\
           --enable-remote-auto-shutdown \\
           --default-folder ${BASE_DIR}/${dirs.cloneDir} 2>&1
