@@ -19,12 +19,12 @@ interface Extensions {
 
 interface ServerInfo {
   port: number;
-  serverProcess?: any;
+  serverProcess?: any; // ChildProcess from child_process, but avoiding import
 }
 
 interface ILoadingView {
   updateMessage(message: string): void;
-  getView(): any;
+  getView(): WebContentsView;
 }
 
 interface SavedPortalDatum {
@@ -715,8 +715,8 @@ class Portal {
   port: number;
   viewName: string;
   createdAt: Date;
-  vscodeView: any = null;
-  metaView: any = null;
+  vscodeView: WebContentsView | null = null;
+  metaView: WebContentsView | null = null;
   extensions?: Extensions;
 
   /// Create Portal with the given uuid/name running on the given host.
@@ -802,9 +802,9 @@ class Portal {
       this.metaView.setBackgroundColor('#1e1e1e');
 
       // Wait for meta-view to load before sending data
-      await new Promise((resolve) => {
-        this.metaView.webContents.once('did-finish-load', resolve);
-        this.metaView.webContents.loadFile(path.join(__dirname, '..', 'meta-view.html'));
+      await new Promise<void>((resolve) => {
+        this.metaView!.webContents.once('did-finish-load', () => resolve());
+        this.metaView!.webContents.loadFile(path.join(__dirname, '..', 'meta-view.html'));
       });
     }
 
@@ -813,7 +813,7 @@ class Portal {
 }
 
 class LoadingView implements ILoadingView {
-  view: any;
+  view: WebContentsView;
 
   constructor() {
     this.view = new WebContentsView({
