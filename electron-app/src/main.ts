@@ -1,4 +1,4 @@
-import { app, BaseWindow, WebContentsView, session, ipcMain } from 'electron';
+import { app, BaseWindow, WebContentsView, session, ipcMain, Session } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -125,7 +125,7 @@ class SwitcherooApp {
   activePortalUuid: string | null = null;
   hostname: string;
   loadingView: ILoadingView;
-  vscodeSession: any;
+  vscodeSession: Session;
   mainWindow: any = null;
   sidebarView: any = null;
   mainView: any = null;
@@ -145,7 +145,7 @@ class SwitcherooApp {
       callback({
         responseHeaders: {
           ...details.responseHeaders,
-          'Content-Security-Policy': ['default-src * \'unsafe-inline\' \'unsafe-eval\'; script-src * \'unsafe-inline\' \'unsafe-eval\'; connect-src * \'unsafe-inline\'; img-src * data: blob: \'unsafe-inline\'; frame-src *; style-src * \'unsafe-inline\';']
+          'Content-Security-Policy': 'default-src * \'unsafe-inline\' \'unsafe-eval\'; script-src * \'unsafe-inline\' \'unsafe-eval\'; connect-src * \'unsafe-inline\'; img-src * data: blob: \'unsafe-inline\'; frame-src *; style-src * \'unsafe-inline\';'
         }
       });
     });
