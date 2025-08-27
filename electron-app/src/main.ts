@@ -184,7 +184,7 @@ class SwitcherooApp {
 
     // Initialize the sidebar HTML and wait for it to load.
     this.loadingView.updateMessage('Loading interface...');
-    this.sidebarView.webContents.loadFile('sidebar.html');
+    this.sidebarView.webContents.loadFile(path.join(__dirname, '..', 'sidebar.html'));
     await new Promise(resolve => {
       this.sidebarView.webContents.once('did-finish-load', resolve);
     });
@@ -784,7 +784,7 @@ class Portal {
       // Wait for meta-view to load before sending data
       await new Promise((resolve) => {
         this.metaView.webContents.once('did-finish-load', resolve);
-        this.metaView.webContents.loadFile('meta-view.html');
+        this.metaView.webContents.loadFile(path.join(__dirname, '..', 'meta-view.html'));
       });
     }
 
@@ -803,7 +803,7 @@ class LoadingView implements ILoadingView {
       }
     });
     this.view.setBackgroundColor('#1e1e1e');
-    this.view.webContents.loadFile(path.join(__dirname, 'loading.html'));
+    this.view.webContents.loadFile(path.join(__dirname, '..', 'loading.html'));
   }
 
   updateMessage(message: string): void {
