@@ -175,7 +175,7 @@ class SwitcherooApp {
     }
 
     // Make sure *some* portal is selected
-    if (!this.activePortalUuid) {
+    if (!this.activePortalUuid || !this.portalWithUuid(this.activePortalUuid)) {
       this.activePortalUuid = this.portals[0].uuid;
     }
 
