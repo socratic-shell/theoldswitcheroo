@@ -98,7 +98,7 @@ class SwitcherooApp {
     // Show main window immediately with loading view
     this.setMainView(this.loadingView.getView());
     this.mainWindow.show();
-    
+
     // Initialize the sidebar HTML and wait for it to load.
     this.loadingView.updateMessage('Loading interface...');
     this.sidebarView.webContents.loadFile('sidebar.html');
@@ -155,11 +155,11 @@ class SwitcherooApp {
     this.updateViewBounds();
   }
 
+  /// Create a vscode server for portal with uuid and (optionally) a previous port.
   async ensureVSCodeServer(portal) {
     // If portal already has a running server, check if it's still alive
     if (portal.port) {
-      const isAlive = await checkPortalHealth(this.hostname, portal.port);
-      if (isAlive) {
+      if (await checkPortalHealth(this.hostname, portal.port)) {
         this.log(`✓ Portal ${portal.name}: Server still running on port ${portal.port}`);
         // Ensure port forwarding is active
         this.forwardPort(portal.port);
@@ -171,24 +171,23 @@ class SwitcherooApp {
 
     // Start fresh server
     this.log(`Starting VSCode server for portal ${portal.name}...`);
-    
+
     // Detect architecture
     const archOutput = await execSSHCommand(this.hostname, 'uname -m');
     const arch = mapArchitecture(archOutput.toLowerCase());
-    
+
     // Install VSCode server
     await installVSCodeServer(this.hostname, arch);
-    
+
     // Start server
     const serverInfo = await this.startVSCodeServer(this.hostname, portal.uuid, portal.name);
-    
-    // Update portal with new server info
+
+    // Update port on the portal
     portal.port = serverInfo.port;
-    portal.serverProcess = serverInfo.serverProcess;
-    
+
     // Start port forwarding
     this.forwardPort(serverInfo.port);
-    
+
     this.log(`✓ Portal ${portal.name}: Server ready on port ${portal.port}`);
   }
 
@@ -241,12 +240,12 @@ class SwitcherooApp {
 
   async switchPortal(portal) {
     this.log(`switchPortal ${portal}`);
-    
+
     // Show loading view immediately
     this.setMainView(this.loadingView.getView());
     this.loadingView.updateMessage('Starting VSCode server...');
-    
-    let view = await portal.ensureView(this.vscodeSession, this.loadingView);
+
+    let view = await portal.ensureView(this, this.loadingView);
     this.setMainView(view);
     this.activePortalUuid = portal.uuid;
 
@@ -269,14 +268,14 @@ class SwitcherooApp {
   async createNewPortal() {
     const uuid = generateUUID();
     const name = `P${this.portals.length}`;
-    
+
     // Create directory and clone project
     await this.createPortalDirectory(uuid, name);
-    
+
     // Create portal object with no server running yet
-    const portal = new Portal(uuid, name, this.hostname, null, null, this);
+    const portal = new Portal(uuid, name, this.hostname, 0, this);
     this.portals.push(portal);
-    
+
     this.notifyPortalsChanged();
     return portal;
   }
@@ -295,7 +294,7 @@ class SwitcherooApp {
         this.log(`✓ Portal ${savedPortalDatum.name}: Directory exists`);
 
         // Create portal object with saved port (server status unknown)
-        const portal = new Portal(savedPortalDatum.uuid, savedPortalDatum.name, this.hostname, savedPortalDatum.port, null, this);
+        const portal = new Portal(savedPortalDatum.uuid, savedPortalDatum.name, this.hostname, savedPortalDatum.port, this);
         this.portals.push(portal);
       } catch (error) {
         this.log(`✗ Portal ${savedPortalDatum.name}: Directory missing, removing from list`);
@@ -355,7 +354,7 @@ class SwitcherooApp {
     const _forwardPid = this.forwardPort(serverInfo.port);
     this.log(`✓ Forwarding port ${serverInfo.port}`);
 
-    const portal = new Portal(uuid, name, this.hostname, serverInfo.port, serverInfo.serverProcess, this);
+    const portal = new Portal(uuid, name, this.hostname, serverInfo.port, this);
     this.portals.push(portal);
     return portal;
   }
@@ -365,23 +364,23 @@ class SwitcherooApp {
     const projectName = 'theoldswitcheroo';
     const projectDir = path.join(os.homedir(), '.socratic-shell', 'theoldswitcheroo', 'projects', projectName);
     const cloneScript = path.join(projectDir, 'fresh-clone.sh');
-    
+
     // Check if project definition exists
     if (!fs.existsSync(cloneScript)) {
       throw new Error(`Project definition not found: ${cloneScript}`);
     }
-    
+
     // Remote target directory for this portal
     const remoteTargetDir = `${BASE_DIR}/portals/${uuid}`;
-    
+
     // Upload the clone script to remote
     const remoteScriptPath = `${BASE_DIR}/fresh-clone-${uuid}.sh`;
-    await execSSHCommand(this.hostname, `cat > ${remoteScriptPath}`, fs.readFileSync(cloneScript, 'utf8'));
+    await execSCP(this.hostname, cloneScript, remoteScriptPath);
     await execSSHCommand(this.hostname, `chmod +x ${remoteScriptPath}`);
-    
+
     // Run the clone script on remote
     await execSSHCommand(this.hostname, `${remoteScriptPath} ${remoteTargetDir}`);
-    
+
     // Clean up the temporary script
     await execSSHCommand(this.hostname, `rm ${remoteScriptPath}`);
   }
@@ -551,13 +550,19 @@ class SwitcherooApp {
 
 /// A "Portal" is an active VSCode window.
 class Portal {
-  constructor(uuid, name, hostname, port = null, serverProcess = null, app = null) {
+  /// Create Portal with the given uuid/name running on the given host.
+  ///
+  /// If port is 0, then no port is assigned yet.
+  ///
+  /// If port is non-zero, then a previous port exists, though we have not yet
+  /// verified that the vscode server is actually *running* on that port.
+  /// That takes place in `ensureView`. If there is no server, the port
+  /// will be reassigned to whatever the fresh server adopts.
+  constructor(uuid, name, hostname, port = 0) {
     this.uuid = uuid;
     this.name = name;
     this.hostname = hostname;
     this.port = port;
-    this.serverProcess = serverProcess;
-    this.app = app; // Reference to SwitcherooApp for server management
     this.viewName = 'vscode'; // current view, vscode or meta
     this.createdAt = new Date();
     this.vscodeView = null; // Will be created when first accessed
@@ -577,15 +582,17 @@ class Portal {
     }
   }
 
-  async ensureView(vscodeSession, loadingView = null) {
+  /// Ensure that the current view exists, either vscode or meta.
+  ///
+  /// Lazilly starts up the vscode server etc.
+  async ensureView(switcheroo, loadingView = null) {
+    const vscodeSession = switcheroo.vscodeSession;
     console.log("ensureView", this.viewName, vscodeSession);
 
     if (this.viewName == 'vscode') {
       if (!this.vscodeView) {
         // Ensure VSCode server is running
-        if (this.app) {
-          await this.app.ensureVSCodeServer(this);
-        }
+        await switcheroo.ensureVSCodeServer(this);
 
         // Create WebContentsView for active session
         this.vscodeView = new WebContentsView({
@@ -607,7 +614,7 @@ class Portal {
         // Load VSCode in the view
         if (loadingView) loadingView.updateMessage('Loading VSCode interface...');
         await this.vscodeView.webContents.loadURL(this.vscodeUrl);
-        
+
         if (loadingView) loadingView.updateMessage('Ready!');
       }
 
@@ -701,6 +708,37 @@ async function execSSHCommand(hostname, command) {
         resolve(stdout.trim());
       } else {
         reject(new Error(`SSH command '${command}' on ${hostname} failed (${code}): ${stderr}`));
+      }
+    });
+  });
+}
+
+// Upload file using scp with ControlMaster
+async function execSCP(hostname, localPath, remotePath) {
+  return new Promise((resolve, reject) => {
+    console.log("execSCP: ", localPath, "->", `${hostname}:${remotePath}`);
+    const scp = spawn('scp', [
+      '-o', 'ControlMaster=auto',
+      '-o', `ControlPath=~/.ssh/cm-${hostname}`,
+      '-o', 'ControlPersist=10m',
+      localPath,
+      `${hostname}:${remotePath}`
+    ], {
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+
+    let stderr = '';
+
+    scp.stderr.on('data', (data) => {
+      console.log("scp stderr: ", data);
+      stderr += data.toString();
+    });
+
+    scp.on('close', (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`SCP failed with code ${code}: ${stderr}`));
       }
     });
   });
