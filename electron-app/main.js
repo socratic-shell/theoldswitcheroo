@@ -232,7 +232,14 @@ class SwitcherooApp {
   async createNewPortal() {
     const uuid = generateUUID();
     const name = `P${this.portals.length}`;
-    const portal = await this.finalizePortal(uuid, name);
+    
+    // Create directory and clone project
+    await this.createPortalDirectory(uuid, name);
+    
+    // Create portal object with no server running yet
+    const portal = new Portal(uuid, name, this.hostname);
+    this.portals.push(portal);
+    
     this.notifyPortalsChanged();
     return portal;
   }
@@ -277,18 +284,13 @@ class SwitcherooApp {
   ///
   /// This portal may have been newly created or may have been loaded from disk
   /// and encountered a missing server.
-  async finalizePortal(uuid, name) {
-    this.log(`Setting up remote server for portal ${name} with uuid ${uuid}...`);
+  async createPortalDirectory(uuid, name) {
+    this.log(`Creating directory and project for portal ${name} with uuid ${uuid}...`);
 
     // Test basic SSH connection first
     this.log('Testing SSH connection...');
     await execSSHCommand(this.hostname, 'echo "SSH connection successful"');
     this.log('✓ SSH connection test successful');
-
-    // Detect architecture
-    const archOutput = await execSSHCommand(this.hostname, 'uname -m');
-    const arch = mapArchitecture(archOutput.toLowerCase());
-    this.log(`✓ Detected architecture: ${archOutput} -> ${arch}`);
 
     // Setup remote directory
     await execSSHCommand(this.hostname, `mkdir -p ${BASE_DIR}/`);
@@ -297,6 +299,20 @@ class SwitcherooApp {
     // Clone project for this portal
     await this.cloneProjectForPortal(uuid, name);
     this.log(`✓ Project cloned for portal ${name}`);
+  }
+
+  ///
+  /// Instantiates a `Portal` object and adds it to `this.portals`.
+  ///
+  /// This portal may have been newly created or may have been loaded from disk
+  /// and encountered a missing server.
+  async finalizePortal(uuid, name) {
+    this.log(`Setting up remote server for portal ${name} with uuid ${uuid}...`);
+
+    // Detect architecture
+    const archOutput = await execSSHCommand(this.hostname, 'uname -m');
+    const arch = mapArchitecture(archOutput.toLowerCase());
+    this.log(`✓ Detected architecture: ${archOutput} -> ${arch}`);
 
     // Install VSCode server
     await installVSCodeServer(this.hostname, arch);
@@ -505,7 +521,7 @@ class SwitcherooApp {
 
 /// A "Portal" is an active VSCode window.
 class Portal {
-  constructor(uuid, name, hostname, port, serverProcess) {
+  constructor(uuid, name, hostname, port = null, serverProcess = null) {
     this.uuid = uuid;
     this.name = name;
     this.hostname = hostname;
