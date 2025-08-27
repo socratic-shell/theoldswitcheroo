@@ -48,6 +48,7 @@ class SwitcherooApp {
     this.activePortalUuid = null;
     this.hostname = hostname;
     this.splash = new SplashScreen(hostname);
+    this.loadingView = new LoadingView();
 
     // Create a persistent session for this hostname (shared across all sessions)
     // and initialize it for vscode compatibility.
@@ -205,7 +206,12 @@ class SwitcherooApp {
 
   async switchPortal(portal) {
     this.log(`switchPortal ${portal}`);
-    let view = await portal.ensureView(this.vscodeSession);
+    
+    // Show loading view immediately
+    this.setMainView(this.loadingView.getView());
+    this.loadingView.updateMessage('Starting VSCode server...');
+    
+    let view = await portal.ensureView(this.vscodeSession, this.loadingView);
     this.setMainView(view);
     this.activePortalUuid = portal.uuid;
 
@@ -494,7 +500,7 @@ class Portal {
     }
   }
 
-  async ensureView(vscodeSession) {
+  async ensureView(vscodeSession, loadingView = null) {
     console.log("ensureView", this.viewName, vscodeSession);
 
     if (this.viewName == 'vscode') {
@@ -513,10 +519,14 @@ class Portal {
         this.vscodeView.webContents.setUserAgent(STANDARD_USER_AGENT);
 
         // Wait for server to be ready before attempting to load the UI
+        if (loadingView) loadingView.updateMessage('Waiting for VSCode server...');
         await waitForServer(this.vscodeUrl);
 
         // Load VSCode in the view
+        if (loadingView) loadingView.updateMessage('Loading VSCode interface...');
         await this.vscodeView.webContents.loadURL(this.vscodeUrl);
+        
+        if (loadingView) loadingView.updateMessage('Ready!');
       }
 
       // Add views to the window
@@ -541,6 +551,27 @@ class Portal {
     }
 
     return this.metaView;
+  }
+}
+
+class LoadingView {
+  constructor() {
+    this.view = new WebContentsView({
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false
+      }
+    });
+    this.view.setBackgroundColor('#1e1e1e');
+    this.view.webContents.loadFile(path.join(__dirname, 'loading.html'));
+  }
+
+  updateMessage(message) {
+    this.view.webContents.send('loading-progress', message);
+  }
+
+  getView() {
+    return this.view;
   }
 }
 
