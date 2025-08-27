@@ -2,13 +2,17 @@
   "name": "theoldswitcheroo-electron",
   "version": "1.0.0",
   "description": "VSCode multiplexer for AI agent workspaces",
-  "main": "main.js",
+  "main": "dist/main.js",
   "scripts": {
-    "start": "electron .",
-    "gui": "electron .",
-    "clean": "node main.js --clean"
+    "build": "tsc",
+    "start": "npm run build && electron .",
+    "gui": "npm run build && electron .",
+    "clean": "npm run build && node dist/main.js --clean"
   },
   "devDependencies": {
-    "electron": "^37.3.1"
+    "@types/electron": "^1.4.38",
+    "@types/node": "^24.3.0",
+    "electron": "^37.3.1",
+    "typescript": "^5.9.2"
   }
 }

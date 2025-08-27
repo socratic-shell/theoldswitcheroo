@@ -4,11 +4,27 @@ const fs = require('fs');
 const os = require('os');
 const http = require('http');
 const { spawn } = require('child_process');
-const crypto = require('crypto');
+const { randomUUID } = require('crypto');
+
+// Type definitions
+interface Extensions {
+  marketplace: string[];
+  local: string[];
+}
+
+interface ServerInfo {
+  port: number;
+  serverProcess?: any;
+}
+
+interface ILoadingView {
+  updateMessage(message: string): void;
+  getView(): any;
+}
 
 // Generate UUID v4
-function generateUUID() {
-  return crypto.randomUUID();
+function generateUUID(): string {
+  return randomUUID();
 }
 
 // Portal persistence
@@ -16,22 +32,28 @@ const LOCAL_DATA_DIR = path.join(os.homedir(), '.socratic-shell', 'theoldswitche
 const PORTALS_FILE = path.join(LOCAL_DATA_DIR, 'portals.json');
 const BASE_DIR = "~/.socratic-shell/theoldswitcheroo";
 
-function portalPaths(uuid) {
-  return {
-    dir: `portals/${uuid}`,
-    cloneDir: `portals/${uuid}/clone`,
-    serverDataDir: `portals/portal-${uuid}/server-data`,
-    extensionsDir: `portals/portal-${uuid}/extensions`,
-    freshClone: `portals/${uuid}/fresh-clone.sh`
-  };
+class PortalPaths {
+  dir: string;
+  cloneDir: string;
+  serverDataDir: string;
+  extensionsDir: string;
+  freshClone: string;
+
+  constructor(uuid: string) {
+    this.dir = `portals/${uuid}`;
+    this.cloneDir = `portals/${uuid}/clone`;
+    this.serverDataDir = `portals/portal-${uuid}/server-data`;
+    this.extensionsDir = `portals/portal-${uuid}/extensions`;
+    this.freshClone = `portals/${uuid}/fresh-clone.sh`;
+  }
 }
 
 // Helper to read project extensions
-function readProjectExtensions() {
+function readProjectExtensions(): Extensions {
   const projectName = 'theoldswitcheroo';
   const projectDir = path.join(LOCAL_DATA_DIR, 'projects', projectName);
   const extensionsFile = path.join(projectDir, 'vscode-extensions.json');
-  
+
   if (fs.existsSync(extensionsFile)) {
     try {
       const extensionsData = JSON.parse(fs.readFileSync(extensionsFile, 'utf8'));
@@ -67,7 +89,7 @@ const cleanIndex = args.indexOf('--clean');
 if (cleanIndex !== -1 && cleanIndex + 1 < args.length) {
   const hostname = args[cleanIndex + 1];
   console.log(`Cleaning ~/.socratic-shell/theoldswitcheroo from ${hostname}...`);
-  
+
   execSSHCommand(hostname, `rm -rf ~/.socratic-shell/theoldswitcheroo`)
     .then(() => {
       console.log(`✓ Cleaned ~/.socratic-shell/theoldswitcheroo from ${hostname}`);
@@ -94,7 +116,16 @@ if (cleanIndex !== -1 && cleanIndex + 1 < args.length) {
 }
 
 class SwitcherooApp {
-  constructor(hostname) {
+  portals: Portal[] = [];
+  activePortalUuid: string | null = null;
+  hostname: string;
+  loadingView: ILoadingView;
+  vscodeSession: any;
+  mainWindow: any = null;
+  sidebarView: any = null;
+  mainView: any = null;
+
+  constructor(hostname: string) {
     // Global session management
     this.portals = [];
     this.activePortalUuid = null;
@@ -226,7 +257,7 @@ class SwitcherooApp {
 
     // Detect architecture
     const archOutput = await execSSHCommand(this.hostname, 'uname -m');
-    const arch = mapArchitecture(archOutput.toLowerCase());
+    const arch = mapArchitecture(String(archOutput).toLowerCase());
 
     // Install VSCode server
     await installVSCodeServer(this.hostname, arch);
@@ -318,7 +349,7 @@ class SwitcherooApp {
     return { success: true };
   }
 
-  async createNewPortal(loadingView = null) {
+  async createNewPortal(loadingView: ILoadingView | null = null) {
     const uuid = generateUUID();
     const name = `P${this.portals.length}`;
 
@@ -343,8 +374,8 @@ class SwitcherooApp {
       this.log(`Checking portal ${savedPortalDatum.name}...`);
 
       // Check if portal clone directory still exists
-      const portalDirs = portalPaths(savedPortalDatum.uuid);
-      const portalCloneDir = `${BASE_DIR}/${portalDirs.cloneDir}`;
+      const portalPaths = new PortalPaths(savedPortalDatum.uuid);
+      const portalCloneDir = `${BASE_DIR}/${portalPaths.cloneDir}`;
       try {
         await execSSHCommand(this.hostname, `test -d ${portalCloneDir}`);
         this.log(`✓ Portal ${savedPortalDatum.name}: Directory exists`);
@@ -369,7 +400,7 @@ class SwitcherooApp {
   ///
   /// This portal may have been newly created or may have been loaded from disk
   /// and encountered a missing server.
-  async createPortalDirectory(uuid, name, loadingView = null) {
+  async createPortalDirectory(uuid: string, name: string, loadingView: ILoadingView | null = null) {
     this.log(`Creating directory and project for portal ${name} with uuid ${uuid}...`);
 
     // Test basic SSH connection first
@@ -386,7 +417,7 @@ class SwitcherooApp {
     // Clone project for this portal
     const extensions = await this.cloneProjectForPortal(uuid, name, loadingView);
     this.log(`✓ Project cloned for portal ${name}`);
-    
+
     return extensions;
   }
 
@@ -395,12 +426,12 @@ class SwitcherooApp {
   ///
   /// This portal may have been newly created or may have been loaded from disk
   /// and encountered a missing server.
-  async finalizePortal(uuid, name) {
+  async finalizePortal(uuid: string, name: string) {
     this.log(`Setting up remote server for portal ${name} with uuid ${uuid}...`);
 
     // Detect architecture
     const archOutput = await execSSHCommand(this.hostname, 'uname -m');
-    const arch = mapArchitecture(archOutput.toLowerCase());
+    const arch = mapArchitecture(String(archOutput).toLowerCase());
     this.log(`✓ Detected architecture: ${archOutput} -> ${arch}`);
 
     // Install VSCode server
@@ -419,7 +450,7 @@ class SwitcherooApp {
     return portal;
   }
 
-  async cloneProjectForPortal(uuid, name, loadingView = null) {
+  async cloneProjectForPortal(uuid: string, name: string, loadingView: ILoadingView | null = null) {
     // For now, hardcode to theoldswitcheroo project
     const projectName = 'theoldswitcheroo';
     const projectDir = path.join(LOCAL_DATA_DIR, 'projects', projectName);
@@ -448,23 +479,23 @@ class SwitcherooApp {
     }
 
     // Remote target directory for this portal
-    const paths = portalPaths(uuid);
-    const remoteTargetDir = `${BASE_DIR}/${paths.cloneDir}`;
+    const portalPaths = new PortalPaths(uuid);
+    const remoteTargetDir = `${BASE_DIR}/${portalPaths.cloneDir}`;
 
     // Create portal directory structure
     if (loadingView) loadingView.updateMessage(`Creating portal ${name} directory...`);
-    await execSSHCommand(this.hostname, `mkdir -p ${BASE_DIR}/${paths.dir}`);
+    await execSSHCommand(this.hostname, `mkdir -p ${BASE_DIR}/${portalPaths.dir}`);
 
     // Upload the clone script to portal directory
     if (loadingView) loadingView.updateMessage(`Uploading clone script for ${name}...`);
-    const remoteScriptPath = `${BASE_DIR}/${paths.freshClone}`;
+    const remoteScriptPath = `${BASE_DIR}/${portalPaths.freshClone}`;
     await execSCP(this.hostname, cloneScript, remoteScriptPath);
     await execSSHCommand(this.hostname, `chmod +x ${remoteScriptPath}`);
 
     // Run the clone script
     if (loadingView) loadingView.updateMessage(`Cloning project for portal ${name}...`);
     await execSSHCommand(this.hostname, `${remoteScriptPath} ${remoteTargetDir}`);
-    
+
     return extensions;
   }
 
@@ -494,7 +525,7 @@ class SwitcherooApp {
           uuid: s.uuid,
           name: s.name,
           port: s.port,
-          serverDataDir: `${BASE_DIR}/${portalPaths(s.uuid).serverDataDir}`,
+          serverDataDir: `${BASE_DIR}/${new PortalPaths(s.uuid).serverDataDir}`,
           lastSeen: new Date().toISOString()
         }))
       };
@@ -507,7 +538,7 @@ class SwitcherooApp {
   }
 
   /// Start a vscode server process for the given portal, connected to the given uuid, with the given name.
-  async startVSCodeServer(hostname, portalUuid, portalName, extensions = { marketplace: [], local: [] }) {
+  async startVSCodeServer(hostname: string, portalUuid: string, portalName: string, extensions: Extensions = { marketplace: [], local: [] }): Promise<ServerInfo> {
     this.log(`Starting SSH with port forwarding for session ${portalName}...`);
 
     // Upload local extensions if any
@@ -523,17 +554,17 @@ class SwitcherooApp {
 
     return new Promise((resolve, reject) => {
 
-      const dirs = portalPaths(portalUuid);
+      const dirs = new PortalPaths(portalUuid);
 
       // Build extension install commands
-      const marketplaceCommands = extensions.marketplace?.length > 0 
+      const marketplaceCommands = extensions.marketplace?.length > 0
         ? extensions.marketplace.map(ext => `./openvscode-server/bin/openvscode-server --extensions-dir ${BASE_DIR}/${dirs.extensionsDir} --install-extension ${ext}`).join(' && ')
         : '';
-      
+
       const localCommands = extensions.local?.length > 0
         ? extensions.local.map(ext => `./openvscode-server/bin/openvscode-server --extensions-dir ${BASE_DIR}/${dirs.extensionsDir} --install-extension ${BASE_DIR}/${path.basename(ext)}`).join(' && ')
         : '';
-      
+
       const allExtensionCommands = [marketplaceCommands, localCommands].filter(cmd => cmd).join(' && ');
 
       // Simple server script with auto-shutdown and data directories
@@ -658,6 +689,16 @@ class SwitcherooApp {
 
 /// A "Portal" is an active VSCode window.
 class Portal {
+  uuid: string;
+  name: string;
+  hostname: string;
+  port: number;
+  viewName: string;
+  createdAt: Date;
+  vscodeView: any = null;
+  metaView: any = null;
+  extensions?: Extensions;
+
   /// Create Portal with the given uuid/name running on the given host.
   ///
   /// If port is 0, then no port is assigned yet.
@@ -666,7 +707,7 @@ class Portal {
   /// verified that the vscode server is actually *running* on that port.
   /// That takes place in `ensureView`. If there is no server, the port
   /// will be reassigned to whatever the fresh server adopts.
-  constructor(uuid, name, hostname, port = 0) {
+  constructor(uuid: string, name: string, hostname: string, port: number = 0, switcheroo?: SwitcherooApp) {
     this.uuid = uuid;
     this.name = name;
     this.hostname = hostname;
@@ -693,7 +734,7 @@ class Portal {
   /// Ensure that the current view exists, either vscode or meta.
   ///
   /// Lazilly starts up the vscode server etc.
-  async ensureView(switcheroo, loadingView = null) {
+  async ensureView(switcheroo: SwitcherooApp, loadingView: ILoadingView | null = null) {
     const vscodeSession = switcheroo.vscodeSession;
     console.log("ensureView", this.viewName, vscodeSession);
 
@@ -751,7 +792,9 @@ class Portal {
   }
 }
 
-class LoadingView {
+class LoadingView implements ILoadingView {
+  view: any;
+
   constructor() {
     this.view = new WebContentsView({
       webPreferences: {
@@ -763,7 +806,7 @@ class LoadingView {
     this.view.webContents.loadFile(path.join(__dirname, 'loading.html'));
   }
 
-  updateMessage(message) {
+  updateMessage(message: string): void {
     this.view.webContents.postMessage('loading-progress', message);
   }
 
@@ -844,7 +887,7 @@ async function execSCP(hostname, localPath, remotePath) {
 
     scp.on('close', (code) => {
       if (code === 0) {
-        resolve();
+        resolve(undefined);
       } else {
         reject(new Error(`SCP failed with code ${code}: ${stderr}`));
       }
@@ -908,7 +951,7 @@ async function waitForServer(url, maxRetries = 10) {
         });
       });
 
-      if (response.statusCode === 200) {
+      if ((response as any).statusCode === 200) {
         console.log('✓ Server is ready');
         return true;
       }
