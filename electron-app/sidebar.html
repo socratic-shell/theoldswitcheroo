@@ -7,7 +7,7 @@
     body {
       margin: 0;
       padding: 0;
-      width: 75px;
+      width: 250px;
       height: 100vh;
       background: #2d2d30;
       overflow: hidden;
@@ -27,21 +27,44 @@
     }
 
     .portal-box {
-      width: 55px;
-      height: 40px;
+      width: 230px;
+      min-height: 60px;
       background: #007acc;
-      border-radius: 4px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      border-radius: 6px;
+      padding: 12px;
       color: white;
-      font-weight: bold;
       cursor: pointer;
       flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
     }
 
     .portal-box.active {
       background: #40a6ff;
+    }
+
+    .portal-name {
+      font-weight: bold;
+      font-size: 14px;
+      line-height: 1.2;
+      word-wrap: break-word;
+    }
+
+    .portal-bullets {
+      font-size: 11px;
+      opacity: 0.9;
+      line-height: 1.3;
+    }
+
+    .portal-bullet {
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .portal-bullet:before {
+      content: "• ";
+      margin-right: 4px;
     }
 
     .bottom-toolbar {
@@ -53,7 +76,7 @@
     }
 
     .toolbar-button {
-      width: 55px;
+      width: 230px;
       height: 40px;
       background: #3c3c3c;
       border: none;
@@ -80,7 +103,7 @@
 
     /* Custom scrollbar */
     .portals-container::-webkit-scrollbar {
-      width: 4px;
+      width: 6px;
     }
 
     .portals-container::-webkit-scrollbar-track {
@@ -89,7 +112,7 @@
 
     .portals-container::-webkit-scrollbar-thumb {
       background: #464647;
-      border-radius: 2px;
+      border-radius: 3px;
     }
 
     /* Context menu */
@@ -101,19 +124,15 @@
       padding: 4px 0;
       z-index: 1000;
       display: none;
-      min-width: 55px;
-      width: 55px;
+      min-width: 120px;
     }
 
     .context-menu-item {
-      padding: 6px 8px;
+      padding: 8px 12px;
       color: #cccccc;
       cursor: pointer;
-      font-size: 11px;
-      text-align: center;
+      font-size: 12px;
       white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
     }
 
     .context-menu-item:hover {
@@ -136,8 +155,8 @@
   </div>
 
   <div class="bottom-toolbar">
-    <button class="toolbar-button" id="settings-button">⚙</button>
-    <button class="toolbar-button add-button" id="add-button">+</button>
+    <button class="toolbar-button" id="settings-button">⚙ Settings</button>
+    <button class="toolbar-button add-button" id="add-button">+ New Portal</button>
   </div>
 
   <script>
@@ -156,8 +175,33 @@
       portalData.forEach(portalDatum => {
         const portalBox = document.createElement('div');
         portalBox.className = `portal-box ${portalDatum.active ? 'active' : ''}`;
-        portalBox.textContent = portalDatum.name;
         portalBox.dataset.portalUuid = portalDatum.uuid;
+
+        // Create portal name element
+        const nameElement = document.createElement('div');
+        nameElement.className = 'portal-name';
+        nameElement.textContent = portalDatum.name;
+
+        // Create bullets container
+        const bulletsElement = document.createElement('div');
+        bulletsElement.className = 'portal-bullets';
+        
+        // Add some sample bullets (will be replaced with real data later)
+        const bullets = [
+          'VSCode server running',
+          'Extensions loaded',
+          `Port ${portalDatum.port || 'pending'}`
+        ];
+        
+        bullets.forEach(bullet => {
+          const bulletElement = document.createElement('span');
+          bulletElement.className = 'portal-bullet';
+          bulletElement.textContent = bullet;
+          bulletsElement.appendChild(bulletElement);
+        });
+
+        portalBox.appendChild(nameElement);
+        portalBox.appendChild(bulletsElement);
 
         // Add click handler for portal switching
         portalBox.addEventListener('click', () => switchToPortal(portalDatum.uuid));
@@ -192,7 +236,7 @@
       // Disable button during creation
       const addButton = document.getElementById('add-button');
       addButton.disabled = true;
-      addButton.textContent = '...';
+      addButton.textContent = '⏳ Creating...';
 
       try {
         const result = await ipcRenderer.invoke('create-portal');
@@ -210,9 +254,9 @@
       } finally {
         // Re-enable button
         addButton.disabled = false;
-        addButton.textContent = '+';
+        addButton.textContent = '+ New Portal';
       }
-    });
+    }); 
 
     // Function to switch portals
     async function switchToPortal(portalUuid) {
