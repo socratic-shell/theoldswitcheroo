@@ -294,6 +294,10 @@ class SwitcherooApp {
     await execSSHCommand(this.hostname, `mkdir -p ${BASE_DIR}/`);
     this.log('✓ Remote directory ready');
 
+    // Clone project for this portal
+    await this.cloneProjectForPortal(uuid, name);
+    this.log(`✓ Project cloned for portal ${name}`);
+
     // Install VSCode server
     await installVSCodeServer(this.hostname, arch);
     this.log('✓ VSCode server installation complete');
@@ -308,6 +312,32 @@ class SwitcherooApp {
     const portal = new Portal(uuid, name, this.hostname, serverInfo.port, serverInfo.serverProcess);
     this.portals.push(portal);
     return portal;
+  }
+
+  async cloneProjectForPortal(uuid, name) {
+    // For now, hardcode to theoldswitcheroo project
+    const projectName = 'theoldswitcheroo';
+    const projectDir = path.join(os.homedir(), '.socratic-shell', 'theoldswitcheroo', 'projects', projectName);
+    const cloneScript = path.join(projectDir, 'fresh-clone.sh');
+    
+    // Check if project definition exists
+    if (!fs.existsSync(cloneScript)) {
+      throw new Error(`Project definition not found: ${cloneScript}`);
+    }
+    
+    // Remote target directory for this portal
+    const remoteTargetDir = `${BASE_DIR}/portals/${uuid}`;
+    
+    // Upload the clone script to remote
+    const remoteScriptPath = `${BASE_DIR}/fresh-clone-${uuid}.sh`;
+    await execSSHCommand(this.hostname, `cat > ${remoteScriptPath}`, fs.readFileSync(cloneScript, 'utf8'));
+    await execSSHCommand(this.hostname, `chmod +x ${remoteScriptPath}`);
+    
+    // Run the clone script on remote
+    await execSSHCommand(this.hostname, `${remoteScriptPath} ${remoteTargetDir}`);
+    
+    // Clean up the temporary script
+    await execSSHCommand(this.hostname, `rm ${remoteScriptPath}`);
   }
 
   // Load portals JSON from disk
@@ -354,6 +384,7 @@ class SwitcherooApp {
       this.log(`Starting SSH with port forwarding for session ${portalName}...`);
 
       const portalDir = `portals/portal-${portalUuid}`;
+      const projectDir = `portals/${portalUuid}`; // This is where the project was cloned
 
       // Simple server script with auto-shutdown and data directories
       const serverScript = `
@@ -363,14 +394,15 @@ class SwitcherooApp {
         mkdir -p ${portalDir}/server-data
         mkdir -p vscode-user-data
         
-        # Start VSCode with data directories and dynamic port
+        # Start VSCode with data directories and dynamic port, opening the cloned project
         ./openvscode-server/bin/openvscode-server \\
           --host 0.0.0.0 \\
           --port 0 \\
           --user-data-dir ${BASE_DIR}/vscode-user-data \\
           --server-data-dir ${BASE_DIR}/${portalDir}/server-data \\
           --without-connection-token \\
-          --enable-remote-auto-shutdown 2>&1
+          --enable-remote-auto-shutdown \\
+          ${BASE_DIR}/${projectDir} 2>&1
       `;
 
       console.log(serverScript);
