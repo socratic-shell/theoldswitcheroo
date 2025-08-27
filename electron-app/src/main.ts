@@ -848,7 +848,7 @@ function getHostname() {
 }
 
 // Execute SSH command using system ssh with ControlMaster
-async function execSSHCommand(hostname, command) {
+async function execSSHCommand(hostname: string, command: string): Promise<string> {
   return new Promise((resolve, reject) => {
     console.log("execSSHCommand: ", hostname, command);
     const ssh = spawn('ssh', [
