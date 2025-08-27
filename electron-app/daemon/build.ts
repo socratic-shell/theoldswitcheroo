@@ -15,7 +15,7 @@ async function build() {
   console.log('Building daemon and CLI tools...');
 
   try {
-    // Bundle daemon
+    // Bundle daemon (ESM)
     await esbuild.build({
       entryPoints: ['daemon.ts'],
       bundle: true,
@@ -34,24 +34,24 @@ async function build() {
     
     console.log('✓ Built daemon-bundled.js');
 
-    // Bundle CLI tool
+    // Bundle CLI tool (CommonJS for commander compatibility)
     await esbuild.build({
       entryPoints: ['cli-tool.ts'],
       bundle: true,
       platform: 'node',
       target: 'node18',
-      outfile: '../dist/theoldswitcheroo-bundled.js',
+      outfile: '../dist/theoldswitcheroo-bundled.cjs',
       external: [], // Bundle all dependencies
-      format: 'esm'
+      format: 'cjs'
     });
     
     // Add shebang to CLI tool
-    const cliPath = path.join(distDir, 'theoldswitcheroo-bundled.js');
+    const cliPath = path.join(distDir, 'theoldswitcheroo-bundled.cjs');
     let cliContent = fs.readFileSync(cliPath, 'utf8');
     cliContent = cliContent.replace(/^#!.*\n/, ''); // Remove existing shebang
     fs.writeFileSync(cliPath, '#!/usr/bin/env node\n' + cliContent);
     
-    console.log('✓ Built theoldswitcheroo-bundled.js');
+    console.log('✓ Built theoldswitcheroo-bundled.cjs');
 
     // Make bundled files executable
     fs.chmodSync(daemonPath, 0o755);
