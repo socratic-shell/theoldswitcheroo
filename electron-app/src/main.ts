@@ -950,7 +950,7 @@ async function installVSCodeServer(hostname: string, arch: string): Promise<void
 }
 
 /// Check if the port is bound on the localhost
-async function checkPortalHealth(hostname, port) {
+async function checkPortalHealth(hostname: string, port: number): Promise<boolean> {
   let resultCode = await execSSHCommand(hostname, `/usr/bin/curl -sL -w %{http_code} http://localhost:${port} -o /dev/null || true`);
   return (resultCode == '200');
 }
