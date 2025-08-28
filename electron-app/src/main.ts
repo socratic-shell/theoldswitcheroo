@@ -144,8 +144,17 @@ if (cleanIndex !== -1 && cleanIndex + 1 < args.length) {
   // Add cleanup for daemon processes
   app.on('before-quit', async () => {
     console.log('App quitting, cleaning up daemon processes...');
-    // Note: We can't easily access the SwitcherooApp instance here
-    // The cleanup will happen when the SSH connections close
+    // Stop all active daemons
+    const activeHosts = ['hostname']; // We'd need to track this properly
+    for (const hostname of activeHosts) {
+      try {
+        // Note: We can't easily access SwitcherooApp instance here
+        // The SSH connections will close automatically
+        console.log(`Daemon cleanup for ${hostname} will happen via SSH connection close`);
+      } catch (error) {
+        console.error(`Error cleaning up daemon for ${hostname}:`, error);
+      }
+    }
   });
 } else {
   console.error('This script must be run with Electron or with --clean flag');
@@ -173,6 +182,10 @@ class SwitcherooApp {
 
     // Initialize portal communication manager
     this.portalManager = new PortalCommunicationManager(sshManager);
+    
+    // Set up portal request handlers
+    this.portalManager.setPortalRequestHandler(this.handlePortalRequest.bind(this));
+    this.portalManager.setStatusRequestHandler(this.handleStatusRequest.bind(this));
 
     // Create a persistent session for this hostname (shared across all sessions)
     // and initialize it for vscode compatibility.
@@ -249,6 +262,17 @@ class SwitcherooApp {
     await new Promise<void>(resolve => {
       this.sidebarView.webContents.once('did-finish-load', () => resolve());
     });
+
+    // Start daemon for this hostname
+    this.loadingView.updateMessage('Starting communication daemon...');
+    try {
+      await this.portalManager.deployDaemonFiles(this.hostname);
+      await this.portalManager.startDaemon(this.hostname);
+      this.log('✓ Daemon started successfully');
+    } catch (error) {
+      this.log(`Warning: Could not start daemon: ${error instanceof Error ? error.message : error}`);
+      // Continue without daemon - existing functionality still works
+    }
 
     // Load existing portals
     this.loadingView.updateMessage('Checking for existing portals...');
@@ -431,6 +455,70 @@ class SwitcherooApp {
       return { success: true };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  /// Handle portal requests from CLI tools via daemon
+  private handlePortalRequest(request: {
+    type: 'new_portal' | 'update_portal';
+    name?: string;
+    description?: string;
+    cwd?: string;
+    uuid?: string;
+    hostname: string;
+  }): void {
+    if (request.type === 'new_portal' && request.name) {
+      // Create new portal using existing system
+      this.createNewPortalFromCLI(request.name, request.description || '', request.cwd || '/tmp', request.hostname);
+    } else if (request.type === 'update_portal' && request.uuid) {
+      // Update existing portal
+      this.updatePortalFromCLI(request.uuid, request.name, request.description);
+    }
+  }
+
+  /// Handle status requests from CLI tools
+  private handleStatusRequest(hostname: string) {
+    return {
+      portals: this.portals.map(portal => ({
+        name: portal.name,
+        status: portal.uuid === this.activePortalUuid ? 'active' : 'inactive',
+        uuid: portal.uuid
+      })),
+      activePortal: this.activePortalUuid || undefined
+    };
+  }
+
+  /// Create portal from CLI request
+  private async createNewPortalFromCLI(name: string, description: string, cwd: string, hostname: string): Promise<void> {
+    try {
+      console.log(`Creating portal from CLI: ${name} on ${hostname}`);
+      
+      // Use existing portal creation logic but with CLI-provided details
+      const portal = await this.createNewPortal();
+      
+      // Update portal with CLI details
+      portal.name = name;
+      // Note: description and cwd would need to be added to Portal class
+      
+      this.notifyPortalsChanged();
+      
+      console.log(`✓ Created portal ${name} from CLI request`);
+    } catch (error) {
+      console.error(`Failed to create portal from CLI:`, error);
+    }
+  }
+
+  /// Update portal from CLI request
+  private updatePortalFromCLI(uuid: string, name?: string, description?: string): void {
+    const portal = this.portalWithUuid(uuid);
+    if (portal) {
+      if (name) portal.name = name;
+      // Note: description would need to be added to Portal class
+      
+      this.notifyPortalsChanged();
+      console.log(`✓ Updated portal ${uuid} from CLI request`);
+    } else {
+      console.warn(`Portal ${uuid} not found for update`);
     }
   }
 

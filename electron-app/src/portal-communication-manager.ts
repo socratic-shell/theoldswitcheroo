@@ -138,10 +138,34 @@ export class PortalCommunicationManager {
   }
 
   private async showHandoffDialog(hostname: string, pid?: string): Promise<boolean> {
-    // TODO: Implement actual dialog in Electron
-    // For now, return true to always take over
-    console.log(`Found existing daemon instance on ${hostname} (PID: ${pid}). Taking over...`);
-    return true;
+    try {
+      const { dialog, BrowserWindow } = await import('electron');
+      
+      // Get the focused window or null
+      const focusedWindow = BrowserWindow.getFocusedWindow();
+      
+      const options = {
+        type: 'question' as const,
+        buttons: ['Take Over', 'Cancel'],
+        defaultId: 0,
+        cancelId: 1,
+        title: 'Existing Daemon Found',
+        message: `Another theoldswitcheroo instance is running on ${hostname}`,
+        detail: pid ? `Process ID: ${pid}\n\nTaking over will stop the existing instance and start a new one under your control.` : 'Taking over will stop the existing instance and start a new one under your control.'
+      };
+
+      const result = focusedWindow 
+        ? await dialog.showMessageBox(focusedWindow, options)
+        : await dialog.showMessageBox(options);
+
+      // Handle both possible return types (number or object with response)
+      const responseIndex = typeof result === 'number' ? result : (result as any).response;
+      return responseIndex === 0;
+    } catch (error) {
+      console.error('Error showing handoff dialog:', error);
+      // Default to taking over if dialog fails
+      return true;
+    }
   }
 
   private handleMessage(hostname: string, message: PortalMessage): void {
@@ -159,23 +183,79 @@ export class PortalCommunicationManager {
     const request = message as PortalRequest;
     console.log(`Creating new portal: ${request.name}`);
     
-    // TODO: Integrate with existing createPortal() method
-    // For now, just log the request
-    console.log('Portal request:', {
-      name: request.name,
-      description: request.description,
-      cwd: request.cwd
-    });
+    // Emit event for main app to handle
+    if (this.onPortalRequest) {
+      this.onPortalRequest({
+        type: 'new_portal',
+        name: request.name,
+        description: request.description || '',
+        cwd: request.cwd || process.cwd(),
+        hostname: this.getCurrentHostname(message)
+      });
+    }
   }
 
   private handleUpdatePortal(message: PortalMessage): void {
     console.log('Updating portal:', message);
-    // TODO: Implement portal update logic
+    
+    // Emit event for main app to handle
+    if (this.onPortalRequest) {
+      this.onPortalRequest({
+        type: 'update_portal',
+        uuid: (message as any).uuid,
+        description: (message as any).description,
+        name: (message as any).name,
+        hostname: this.getCurrentHostname(message)
+      });
+    }
   }
 
   private handleStatusRequest(message: PortalMessage): void {
     console.log('Status request received');
-    // TODO: Send back current portal status
+    
+    // Send back current portal status via daemon
+    const hostname = this.getCurrentHostname(message);
+    if (this.onStatusRequest) {
+      const status = this.onStatusRequest(hostname);
+      this.sendMessage(hostname, {
+        type: 'status_response',
+        timestamp: new Date().toISOString(),
+        ...status
+      }).catch(console.error);
+    }
+  }
+
+  private getCurrentHostname(message: PortalMessage): string {
+    // Find which hostname this message came from
+    for (const [hostname, process] of this.daemonProcesses) {
+      // For now, return the first active hostname
+      // In a real implementation, we'd track message sources
+      return hostname;
+    }
+    return 'unknown';
+  }
+
+  // Event handlers for main app integration
+  private onPortalRequest?: (request: {
+    type: 'new_portal' | 'update_portal';
+    name?: string;
+    description?: string;
+    cwd?: string;
+    uuid?: string;
+    hostname: string;
+  }) => void;
+
+  private onStatusRequest?: (hostname: string) => {
+    portals: Array<{ name: string; status: string; uuid: string }>;
+    activePortal?: string;
+  };
+
+  setPortalRequestHandler(handler: typeof this.onPortalRequest): void {
+    this.onPortalRequest = handler;
+  }
+
+  setStatusRequestHandler(handler: typeof this.onStatusRequest): void {
+    this.onStatusRequest = handler;
   }
 
   async sendMessage(hostname: string, message: PortalMessage): Promise<void> {
