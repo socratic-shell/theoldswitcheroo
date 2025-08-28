@@ -5,19 +5,19 @@ Model Context Protocol (MCP) server for managing VSCode taskspaces through AI ag
 ## Overview
 
 This MCP server enables AI agents to:
-- Create new taskspaces for focused development work
+- Create new taskspaces with AI agents for focused development work
 - Log progress with visual indicators and categories
 - Signal users when help is needed
 
 ## Tools
 
 ### `new_taskspace`
-Create a new taskspace for focused development work.
+Create a new taskspace with an AI agent for focused development work. The taskspace will start with an AI agent that can optionally be given an initial prompt to begin performing research, coding, or other tasks.
 
 **Parameters:**
 - `name` (string, required): Name for the taskspace
 - `short_description` (string, required): Brief description of the work to be done  
-- `initial_prompt` (string, required): Initial prompt or context for the taskspace
+- `initial_prompt` (string, optional): Initial prompt or context for the AI agent to get started with the task
 
 ### `log_progress`
 Log progress on the current task with visual indicators.

@@ -48,7 +48,7 @@ class TaskSpaceMCPServer {
         tools: [
           {
             name: 'new_taskspace',
-            description: 'Create a new taskspace for focused development work',
+            description: 'Create a new taskspace with an AI agent for focused development work. The taskspace will start with an AI agent that can optionally be given an initial prompt to begin performing research, coding, or other tasks.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -62,10 +62,10 @@ class TaskSpaceMCPServer {
                 },
                 initial_prompt: {
                   type: 'string',
-                  description: 'Initial prompt or context for the taskspace',
+                  description: 'Optional initial prompt or context for the AI agent to get started with the task',
                 },
               },
-              required: ['name', 'short_description', 'initial_prompt'],
+              required: ['name', 'short_description'],
             },
           },
           {
@@ -149,24 +149,32 @@ class TaskSpaceMCPServer {
   private async handleNewTaskSpace(args: {
     name: string;
     short_description: string;
-    initial_prompt: string;
+    initial_prompt?: string;
   }) {
     const message: TaskSpaceMessage = {
       type: 'new_taskspace_request',
       name: args.name,
       description: args.short_description,
-      initial_prompt: args.initial_prompt,
       cwd: process.cwd(),
       timestamp: new Date().toISOString(),
     };
 
+    // Add initial_prompt only if provided
+    if (args.initial_prompt) {
+      message.initial_prompt = args.initial_prompt;
+    }
+
     await this.sendMessage(message);
+
+    const promptInfo = args.initial_prompt 
+      ? `\nInitial prompt: ${args.initial_prompt}`
+      : '\nNo initial prompt provided - AI agent will start without specific instructions.';
 
     return {
       content: [
         {
           type: 'text',
-          text: `✓ TaskSpace creation request sent: "${args.name}"\nDescription: ${args.short_description}`,
+          text: `✓ TaskSpace creation request sent: "${args.name}"\nDescription: ${args.short_description}${promptInfo}`,
         },
       ],
     };
