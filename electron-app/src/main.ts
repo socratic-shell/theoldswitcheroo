@@ -166,6 +166,7 @@ class SwitcherooApp {
   activePortalUuid: string | null = null;
   hostname: string;
   loadingView: ILoadingView;
+  errorView: ErrorView;
   vscodeSession: Session;
   mainWindow!: BaseWindow;
   sidebarView!: WebContentsView;
@@ -179,6 +180,7 @@ class SwitcherooApp {
     this.activePortalUuid = null;
     this.hostname = hostname;
     this.loadingView = new LoadingView();
+    this.errorView = new ErrorView();
 
     // Initialize portal communication manager
     this.portalManager = new PortalCommunicationManager(sshManager);
@@ -271,8 +273,16 @@ class SwitcherooApp {
       this.log('✓ Daemon started successfully');
       this.log('✓ CLI tool available in terminals as: theoldswitcheroo');
     } catch (error) {
-      this.log(`Warning: Could not start daemon: ${error instanceof Error ? error.message : error}`);
-      // Continue without daemon - existing functionality still works
+      this.log(`Error: Could not start daemon: ${error instanceof Error ? error.message : error}`);
+      
+      // Show error view instead of continuing
+      this.errorView.showError(
+        'Daemon Setup Failed',
+        'Could not start the communication daemon. This may affect CLI tool functionality.',
+        error instanceof Error ? error.message : String(error)
+      );
+      this.setMainView(this.errorView.getView());
+      return; // Stop here instead of continuing
     }
 
     // Load existing portals
@@ -528,6 +538,12 @@ class SwitcherooApp {
     } else {
       console.warn(`Portal ${uuid} not found for update`);
     }
+  }
+
+  /// Show error view with custom message
+  showError(title: string, message: string, details?: string): void {
+    this.errorView.showError(title, message, details);
+    this.setMainView(this.errorView.getView());
   }
 
   /// Handles a toggle view message from the sidebar
@@ -932,6 +948,41 @@ class Portal {
     }
 
     return this.metaView;
+  }
+}
+
+class ErrorView implements ILoadingView {
+  view: WebContentsView;
+
+  constructor() {
+    this.view = new WebContentsView({
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false
+      }
+    });
+    this.view.setBackgroundColor('#1e1e1e');
+    this.view.webContents.loadFile(path.join(__dirname, '..', 'error-view.html'));
+  }
+
+  updateMessage(message: string): void {
+    this.view.webContents.postMessage('error-details', {
+      type: 'error-details',
+      message: message
+    });
+  }
+
+  showError(title: string, message: string, details?: string): void {
+    this.view.webContents.postMessage('error-details', {
+      type: 'error-details',
+      title,
+      message,
+      details
+    });
+  }
+
+  getView() {
+    return this.view;
   }
 }
 

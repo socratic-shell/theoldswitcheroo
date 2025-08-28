@@ -48,7 +48,7 @@ export class PortalCommunicationManager {
       // Check if daemon files exist on remote host
       const checkCommand = `test -f ${daemonPath} && echo "exists" || echo "missing"`;
       const checkResult = await this.sshManager.executeCommand(hostname, checkCommand);
-      
+
       if (checkResult.trim() !== 'exists') {
         throw new Error(`Daemon files not found on ${hostname}. Run setup first.`);
       }
@@ -60,7 +60,7 @@ export class PortalCommunicationManager {
         if (!shouldTakeOver) {
           throw new Error('User declined to take over existing instance');
         }
-        
+
         // Kill existing daemon
         await this.sshManager.executeCommand(hostname, `kill ${instanceCheck.pid} 2>/dev/null || true`);
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -126,7 +126,7 @@ export class PortalCommunicationManager {
       // Check if socket exists and get daemon PID
       const checkCommand = `if [ -S "${socketPath}" ]; then lsof -t "${socketPath}" 2>/dev/null | head -1; else echo ""; fi`;
       const result = await this.sshManager.executeCommand(hostname, checkCommand);
-      
+
       const pid = result.trim();
       return {
         exists: pid !== '',
@@ -140,10 +140,10 @@ export class PortalCommunicationManager {
   private async showHandoffDialog(hostname: string, pid?: string): Promise<boolean> {
     try {
       const { dialog, BrowserWindow } = await import('electron');
-      
+
       // Get the focused window or null
       const focusedWindow = BrowserWindow.getFocusedWindow();
-      
+
       const options = {
         type: 'question' as const,
         buttons: ['Take Over', 'Cancel'],
@@ -154,7 +154,7 @@ export class PortalCommunicationManager {
         detail: pid ? `Process ID: ${pid}\n\nTaking over will stop the existing instance and start a new one under your control.` : 'Taking over will stop the existing instance and start a new one under your control.'
       };
 
-      const result = focusedWindow 
+      const result = focusedWindow
         ? await dialog.showMessageBox(focusedWindow, options)
         : await dialog.showMessageBox(options);
 
@@ -170,7 +170,7 @@ export class PortalCommunicationManager {
 
   private handleMessage(hostname: string, message: PortalMessage): void {
     console.log(`[${hostname}] Received message:`, message);
-    
+
     const handler = this.messageHandlers.get(message.type);
     if (handler) {
       handler(message);
@@ -182,7 +182,7 @@ export class PortalCommunicationManager {
   private handleNewPortalRequest(message: PortalMessage): void {
     const request = message as PortalRequest;
     console.log(`Creating new portal: ${request.name}`);
-    
+
     // Emit event for main app to handle
     if (this.onPortalRequest) {
       this.onPortalRequest({
@@ -197,7 +197,7 @@ export class PortalCommunicationManager {
 
   private handleUpdatePortal(message: PortalMessage): void {
     console.log('Updating portal:', message);
-    
+
     // Emit event for main app to handle
     if (this.onPortalRequest) {
       this.onPortalRequest({
@@ -212,7 +212,7 @@ export class PortalCommunicationManager {
 
   private handleStatusRequest(message: PortalMessage): void {
     console.log('Status request received');
-    
+
     // Send back current portal status via daemon
     const hostname = this.getCurrentHostname(message);
     if (this.onStatusRequest) {
@@ -272,48 +272,48 @@ export class PortalCommunicationManager {
     const baseDir = `~/.socratic-shell/theoldswitcheroo`;
     const binDir = `${baseDir}/bin`;
     const distDir = path.join(__dirname, '..', 'dist');
-    
+
     // Ensure directories exist
-    await this.sshManager.executeCommand(hostname, `mkdir -p ${baseDir} ${binDir}`);
-    
+    await this.sshManager.executeCommand(hostname, `mkdir -p ${binDir}`);
+
     // Upload bundled daemon and CLI files
     const daemonSource = path.join(distDir, 'daemon-bundled.js');
     const cliSource = path.join(distDir, 'theoldswitcheroo-bundled.cjs');
-    
+
     if (!fs.existsSync(daemonSource)) {
       throw new Error('Daemon bundle not found. Run npm run build first.');
     }
-    
+
     if (!fs.existsSync(cliSource)) {
       throw new Error('CLI bundle not found. Run npm run build first.');
     }
 
     // Upload daemon to base directory
     await this.sshManager.uploadFile(hostname, daemonSource, `${baseDir}/daemon-bundled.js`);
-    
+
     // Upload CLI tool to bin directory (without .cjs extension for cleaner usage)
     await this.sshManager.uploadFile(hostname, cliSource, `${binDir}/theoldswitcheroo`);
-    
+
     // Make files executable
     await this.sshManager.executeCommand(hostname, `chmod +x ${baseDir}/daemon-bundled.js ${binDir}/theoldswitcheroo`);
-    
+
     console.log(`Deployed daemon files to ${hostname}`);
     console.log(`CLI tool available at: ${binDir}/theoldswitcheroo`);
   }
 
   async deployAdditionalTools(hostname: string, tools: Array<{ localPath: string; remoteName: string }>): Promise<void> {
     const binDir = `~/.socratic-shell/theoldswitcheroo/bin`;
-    
+
     for (const tool of tools) {
       if (!fs.existsSync(tool.localPath)) {
         console.warn(`Tool not found: ${tool.localPath}, skipping...`);
         continue;
       }
-      
+
       const remotePath = `${binDir}/${tool.remoteName}`;
       await this.sshManager.uploadFile(hostname, tool.localPath, remotePath);
       await this.sshManager.executeCommand(hostname, `chmod +x ${remotePath}`);
-      
+
       console.log(`Deployed tool: ${tool.remoteName}`);
     }
   }
