@@ -301,9 +301,41 @@ export class PortalCommunicationManager {
 
     // Make files executable
     await this.sshManager.executeCommand(hostname, `chmod +x ${baseDir}/daemon-bundled.js ${binDir}/theoldswitcheroo`);
+    
+    // Add bin directory to shell profiles for terminal access
+    await this.setupShellPath(hostname, binDir);
 
     console.log(`Deployed daemon files to ${hostname}`);
     console.log(`CLI tool available at: ${binDir}/theoldswitcheroo`);
+  }
+
+  private async setupShellPath(hostname: string, binDir: string): Promise<void> {
+    const pathLine = `export PATH="${binDir}:$PATH"`;
+    
+    // Add to common shell profiles
+    const profiles = ['~/.bashrc', '~/.zshrc', '~/.profile'];
+    
+    for (const profile of profiles) {
+      try {
+        // Check if the path is already in the profile
+        const checkResult = await this.sshManager.executeCommand(
+          hostname, 
+          `grep -q "${binDir}" ${profile} 2>/dev/null && echo "exists" || echo "missing"`
+        );
+        
+        if (checkResult.trim() === 'missing') {
+          // Add the path to the profile
+          await this.sshManager.executeCommand(
+            hostname,
+            `echo '# theoldswitcheroo CLI tool' >> ${profile} && echo '${pathLine}' >> ${profile}`
+          );
+          console.log(`Added PATH to ${profile}`);
+        }
+      } catch (error) {
+        // Profile might not exist, that's okay
+        console.log(`Skipping ${profile} (not found or not accessible)`);
+      }
+    }
   }
 
   async deployAdditionalTools(hostname: string, tools: Array<{ localPath: string; remoteName: string }>): Promise<void> {
