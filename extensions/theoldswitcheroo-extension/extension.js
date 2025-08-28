@@ -1,10 +1,14 @@
 const vscode = require('vscode');
+const os = require('os');
+const path = require('path');
 
 function activate(context) {
     console.log('The Old Switcheroo extension is now active!');
 
     // Add theoldswitcheroo bin directory to PATH for integrated terminals
-    const binPath = '~/.socratic-shell/theoldswitcheroo/bin';
+    // Use expanded home directory instead of tilde
+    const homeDir = os.homedir();
+    const binPath = path.join(homeDir, '.socratic-shell', 'theoldswitcheroo', 'bin');
     const currentPath = process.env.PATH || '';
     
     console.log(`Current PATH: ${currentPath}`);
@@ -24,6 +28,7 @@ function activate(context) {
     outputChannel.appendLine('Hello, world! The Old Switcheroo extension is loaded and ready.');
     outputChannel.appendLine(`CLI tool available in terminals: theoldswitcheroo`);
     outputChannel.appendLine(`PATH modified: ${!currentPath.includes(binPath) ? 'YES' : 'NO (already present)'}`);
+    outputChannel.appendLine(`Bin path: ${binPath}`);
     outputChannel.show();
 
     let disposable = vscode.commands.registerCommand('theoldswitcheroo.helloWorld', function () {
