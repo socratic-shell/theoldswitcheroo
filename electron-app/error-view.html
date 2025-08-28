@@ -78,14 +78,19 @@
         <div class="error-message" id="error-message">
             We encountered an issue while setting up your portal.
         </div>
-        <button class="retry-button" onclick="window.location.reload()">
-            Try Again
+        <button class="retry-button" onclick="quitApp()">
+            Quit
         </button>
         <div class="error-details" id="error-details" style="display: none;"></div>
     </div>
 
     <script>
         const { ipcRenderer } = require('electron');
+        
+        function quitApp() {
+            const { app } = require('electron');
+            app.quit();
+        }
         
         // Listen for error details
         window.addEventListener('message', (event) => {
