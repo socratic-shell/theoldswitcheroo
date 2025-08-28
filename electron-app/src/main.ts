@@ -269,6 +269,7 @@ class SwitcherooApp {
       await this.portalManager.deployDaemonFiles(this.hostname);
       await this.portalManager.startDaemon(this.hostname);
       this.log('✓ Daemon started successfully');
+      this.log('✓ CLI tool available in terminals as: theoldswitcheroo');
     } catch (error) {
       this.log(`Warning: Could not start daemon: ${error instanceof Error ? error.message : error}`);
       // Continue without daemon - existing functionality still works
@@ -431,7 +432,14 @@ class SwitcherooApp {
   /// Handles daemon setup for a host
   async handleSetupHost(hostname: string) {
     try {
+      // Deploy daemon files (includes CLI tool in bin directory)
       await this.portalManager.deployDaemonFiles(hostname);
+      
+      // TODO: Deploy additional tools if needed
+      // await this.portalManager.deployAdditionalTools(hostname, [
+      //   { localPath: '/path/to/other/tool', remoteName: 'tool-name' }
+      // ]);
+      
       return { success: true };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) };
@@ -722,6 +730,9 @@ class SwitcherooApp {
         mkdir -p vscode-user-data
         
         ${allExtensionCommands ? `# Install extensions\n        ${allExtensionCommands}\n        ` : ''}
+        # Add shared bin directory to PATH for all terminals
+        export PATH="${BASE_DIR}/bin:$PATH"
+        
         # Start VSCode with data directories and dynamic port, opening the cloned project
         ./openvscode-server/bin/openvscode-server \\
           --host 0.0.0.0 \\

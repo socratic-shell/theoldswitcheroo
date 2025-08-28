@@ -270,10 +270,11 @@ export class PortalCommunicationManager {
 
   async deployDaemonFiles(hostname: string): Promise<void> {
     const baseDir = `~/.socratic-shell/theoldswitcheroo`;
+    const binDir = `${baseDir}/bin`;
     const distDir = path.join(__dirname, '..', 'dist');
     
-    // Ensure base directory exists
-    await this.sshManager.executeCommand(hostname, `mkdir -p ${baseDir}`);
+    // Ensure directories exist
+    await this.sshManager.executeCommand(hostname, `mkdir -p ${baseDir} ${binDir}`);
     
     // Upload bundled daemon and CLI files
     const daemonSource = path.join(distDir, 'daemon-bundled.js');
@@ -287,14 +288,34 @@ export class PortalCommunicationManager {
       throw new Error('CLI bundle not found. Run npm run build first.');
     }
 
-    // Upload files
+    // Upload daemon to base directory
     await this.sshManager.uploadFile(hostname, daemonSource, `${baseDir}/daemon-bundled.js`);
-    await this.sshManager.uploadFile(hostname, cliSource, `${baseDir}/theoldswitcheroo`);
+    
+    // Upload CLI tool to bin directory (without .cjs extension for cleaner usage)
+    await this.sshManager.uploadFile(hostname, cliSource, `${binDir}/theoldswitcheroo`);
     
     // Make files executable
-    await this.sshManager.executeCommand(hostname, `chmod +x ${baseDir}/daemon-bundled.js ${baseDir}/theoldswitcheroo`);
+    await this.sshManager.executeCommand(hostname, `chmod +x ${baseDir}/daemon-bundled.js ${binDir}/theoldswitcheroo`);
     
     console.log(`Deployed daemon files to ${hostname}`);
+    console.log(`CLI tool available at: ${binDir}/theoldswitcheroo`);
+  }
+
+  async deployAdditionalTools(hostname: string, tools: Array<{ localPath: string; remoteName: string }>): Promise<void> {
+    const binDir = `~/.socratic-shell/theoldswitcheroo/bin`;
+    
+    for (const tool of tools) {
+      if (!fs.existsSync(tool.localPath)) {
+        console.warn(`Tool not found: ${tool.localPath}, skipping...`);
+        continue;
+      }
+      
+      const remotePath = `${binDir}/${tool.remoteName}`;
+      await this.sshManager.uploadFile(hostname, tool.localPath, remotePath);
+      await this.sshManager.executeCommand(hostname, `chmod +x ${remotePath}`);
+      
+      console.log(`Deployed tool: ${tool.remoteName}`);
+    }
   }
 
   isRunning(hostname: string): boolean {
