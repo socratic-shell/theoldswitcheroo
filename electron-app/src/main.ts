@@ -246,6 +246,9 @@ class SwitcherooApp {
     ipcMain.handle('start-daemon', async (_event, hostname) => await this.handleStartDaemon(hostname));
     ipcMain.handle('stop-daemon', async (_event, hostname) => await this.handleStopDaemon(hostname));
     ipcMain.handle('get-daemon-status', (_event, hostname) => this.portalManager.isRunning(hostname));
+    ipcMain.handle('quit-app', () => {
+      app.quit();
+    });
   }
 
   async bootUp() {

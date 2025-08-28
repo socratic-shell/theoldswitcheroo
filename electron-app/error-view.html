@@ -88,8 +88,7 @@
         const { ipcRenderer } = require('electron');
         
         function quitApp() {
-            const { app } = require('electron');
-            app.quit();
+            ipcRenderer.invoke('quit-app');
         }
         
         // Listen for error details
