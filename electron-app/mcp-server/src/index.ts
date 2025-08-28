@@ -20,6 +20,7 @@ interface TaskSpaceMessage {
 class TaskSpaceMCPServer {
   private server: Server;
   private socketPath: string;
+  private taskspaceUuid: string | null;
 
   constructor() {
     this.server = new Server(
@@ -38,12 +39,29 @@ class TaskSpaceMCPServer {
     const baseDir = process.env.BASE_DIR || path.join(os.homedir(), '.socratic-shell', 'theoldswitcheroo');
     this.socketPath = process.env.THEOLDSWITCHEROO_SOCKET || path.join(baseDir, 'daemon.sock');
 
+    // Extract UUID from current working directory
+    this.taskspaceUuid = this.extractUuidFromPath(process.cwd());
+
     this.setupToolHandlers();
+  }
+
+  private extractUuidFromPath(cwd: string): string | null {
+    // Look for UUID pattern in the path (e.g., /path/to/taskspaces/uuid-here/clone)
+    const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+    const match = cwd.match(uuidRegex);
+    return match ? match[0] : null;
   }
 
   private setupToolHandlers(): void {
     // List available tools
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
+      // If not running in a taskspace, offer no tools
+      if (!this.taskspaceUuid) {
+        return {
+          tools: [],
+        };
+      }
+
       return {
         tools: [
           {
@@ -109,13 +127,26 @@ class TaskSpaceMCPServer {
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
 
+      // If not running in a taskspace, reject all tool calls
+      if (!this.taskspaceUuid) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: 'Error: MCP server is not running within a taskspace directory. No tools are available.',
+            },
+          ],
+          isError: true,
+        };
+      }
+
       try {
         switch (name) {
           case 'new_taskspace':
             return await this.handleNewTaskSpace(args as {
               name: string;
               short_description: string;
-              initial_prompt: string;
+              initial_prompt?: string;
             });
 
           case 'log_progress':
@@ -188,6 +219,7 @@ class TaskSpaceMCPServer {
       type: 'progress_log',
       message: args.message,
       category: args.category,
+      taskspace_uuid: this.taskspaceUuid!,
       timestamp: new Date().toISOString(),
     };
 
@@ -209,6 +241,7 @@ class TaskSpaceMCPServer {
     const message: TaskSpaceMessage = {
       type: 'user_signal',
       message: args.message,
+      taskspace_uuid: this.taskspaceUuid!,
       timestamp: new Date().toISOString(),
     };
 

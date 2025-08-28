@@ -9,6 +9,8 @@ This MCP server enables AI agents to:
 - Log progress with visual indicators and categories
 - Signal users when help is needed
 
+**Important**: The MCP server must be running from within a taskspace directory (containing a UUID in the path) to offer any tools. When run from outside a taskspace, it returns zero tools.
+
 ## Tools
 
 ### `new_taskspace`
@@ -66,6 +68,22 @@ AI Agent → MCP Client → MCP Server → Unix Socket → Daemon → Electron A
 ```
 
 The MCP server translates MCP tool calls into daemon messages that flow through the existing theoldswitcheroo communication infrastructure.
+
+## Taskspace Synchronization
+
+The MCP server automatically detects which taskspace it's running in by:
+
+1. **UUID Detection**: Extracts UUID from current working directory path
+2. **Tool Availability**: Only offers tools when running within a taskspace directory
+3. **Message Routing**: Includes taskspace UUID in all messages for proper routing
+
+**Example paths that work:**
+- `/path/to/taskspaces/12345678-1234-1234-1234-123456789abc/clone`
+- `/Users/name/work/uuid-here/project`
+
+**Behavior:**
+- **In taskspace**: All 3 tools available (new_taskspace, log_progress, signal_user)
+- **Outside taskspace**: Zero tools available, tool calls return error
 
 ## Testing
 
