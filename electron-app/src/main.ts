@@ -184,7 +184,7 @@ class SwitcherooApp {
 
     // Initialize portal communication manager
     this.portalManager = new PortalCommunicationManager(sshManager);
-    
+
     // Set up portal request handlers
     this.portalManager.setPortalRequestHandler(this.handlePortalRequest.bind(this));
     this.portalManager.setStatusRequestHandler(this.handleStatusRequest.bind(this));
@@ -307,7 +307,7 @@ class SwitcherooApp {
 
     } catch (error) {
       this.log(`Error during startup: ${error instanceof Error ? error.message : error}`);
-      
+
       // Show error view for any startup failure
       this.errorView.showError(
         'Startup Failed',
@@ -399,7 +399,7 @@ class SwitcherooApp {
     }
   }
 
-  portalWithUuid(portalUuid) {
+  portalWithUuid(portalUuid): Portal {
     return this.portals.find(s => s.uuid === portalUuid);
   }
 
@@ -447,12 +447,12 @@ class SwitcherooApp {
     try {
       // Deploy daemon files (includes CLI tool in bin directory)
       await this.portalManager.deployDaemonFiles(hostname);
-      
+
       // TODO: Deploy additional tools if needed
       // await this.portalManager.deployAdditionalTools(hostname, [
       //   { localPath: '/path/to/other/tool', remoteName: 'tool-name' }
       // ]);
-      
+
       return { success: true };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) };
@@ -513,16 +513,16 @@ class SwitcherooApp {
   private async createNewPortalFromCLI(name: string, description: string, cwd: string, hostname: string): Promise<void> {
     try {
       console.log(`Creating portal from CLI: ${name} on ${hostname}`);
-      
+
       // Use existing portal creation logic but with CLI-provided details
       const portal = await this.createNewPortal();
-      
+
       // Update portal with CLI details
       portal.name = name;
       // Note: description and cwd would need to be added to Portal class
-      
+
       this.notifyPortalsChanged();
-      
+
       console.log(`✓ Created portal ${name} from CLI request`);
     } catch (error) {
       console.error(`Failed to create portal from CLI:`, error);
@@ -535,7 +535,7 @@ class SwitcherooApp {
     if (portal) {
       if (name) portal.name = name;
       // Note: description would need to be added to Portal class
-      
+
       this.notifyPortalsChanged();
       console.log(`✓ Updated portal ${uuid} from CLI request`);
     } else {
@@ -1015,7 +1015,7 @@ function getHostname() {
   if (settings.hostname) {
     return settings.hostname;
   }
-  
+
   console.error('No hostname configured in settings.');
   console.error('Create ~/.socratic-shell/theoldswitcheroo/settings.json with {"hostname": "your-host"}');
   app.quit();

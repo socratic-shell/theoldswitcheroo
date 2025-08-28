@@ -21,18 +21,18 @@ async function build() {
       bundle: true,
       platform: 'node',
       target: 'node18',
-      outfile: '../dist/daemon-bundled.js',
+      outfile: '../dist/daemon-bundled.cjs',
       external: [], // Bundle all dependencies
       format: 'cjs'
     });
     
     // Add shebang to daemon
-    const daemonPath = path.join(distDir, 'daemon-bundled.js');
+    const daemonPath = path.join(distDir, 'daemon-bundled.cjs');
     let daemonContent = fs.readFileSync(daemonPath, 'utf8');
     daemonContent = daemonContent.replace(/^#!.*\n/, ''); // Remove existing shebang
     fs.writeFileSync(daemonPath, '#!/usr/bin/env node\n' + daemonContent);
     
-    console.log('✓ Built daemon-bundled.js');
+    console.log('✓ Built daemon-bundled.cjs');
 
     // Bundle CLI tool (CommonJS for commander compatibility)
     await esbuild.build({

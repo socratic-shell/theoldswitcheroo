@@ -6,7 +6,7 @@ import * as path from 'path';
 describe('Portal CLI Tool', () => {
   let daemonProcess: ChildProcess;
   const testSocketPath = '/tmp/test-cli-daemon.sock';
-  const bundledDaemonPath = path.join(__dirname, '..', 'dist', 'daemon-bundled.js');
+  const bundledDaemonPath = path.join(__dirname, '..', 'dist', 'daemon-bundled.cjs');
   const bundledCliPath = path.join(__dirname, '..', 'dist', 'theoldswitcheroo-bundled.cjs');
 
   beforeEach(async () => {

@@ -6,7 +6,7 @@
   "main": "daemon.ts",
   "scripts": {
     "build": "tsx build.ts",
-    "test": "jest",
+    "test": "npm run build && jest",
     "test:watch": "jest --watch",
     "dev": "tsx daemon.ts"
   },

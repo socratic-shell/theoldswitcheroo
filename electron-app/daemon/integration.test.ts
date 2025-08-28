@@ -5,7 +5,7 @@ import * as os from 'os';
 
 describe('Integration Tests', () => {
   const testSocketPath = '/tmp/integration-test-daemon.sock';
-  const bundledDaemonPath = path.join(__dirname, '..', 'dist', 'daemon-bundled.js');
+  const bundledDaemonPath = path.join(__dirname, '..', 'dist', 'daemon-bundled.cjs');
   const bundledCliPath = path.join(__dirname, '..', 'dist', 'theoldswitcheroo-bundled.cjs');
 
   beforeEach(() => {

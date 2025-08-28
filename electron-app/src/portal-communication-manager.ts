@@ -48,7 +48,7 @@ export class PortalCommunicationManager {
 
       const baseDir = `~/.socratic-shell/theoldswitcheroo`;
       const socketPath = `${baseDir}/daemon.sock`;
-      const daemonPath = `${baseDir}/daemon-bundled.js`;
+      const daemonPath = `${baseDir}/daemon-bundled.cjs`;
 
       // Check if daemon files exist on remote host
       const checkCommand = `test -f ${daemonPath} && echo "exists" || echo "missing"`;
@@ -72,7 +72,7 @@ export class PortalCommunicationManager {
       }
 
       // Start daemon via SSH
-      const daemonCommand = `cd ${baseDir} && ./nodejs/bin/node daemon-bundled.js --socket-path ${socketPath}`;
+      const daemonCommand = `cd ${baseDir} && ./nodejs/bin/node daemon-bundled.cjs --socket-path ${socketPath}`;
       const daemonProcess = spawn('ssh', [
         '-o', 'ControlMaster=no',
         '-o', 'ControlPath=none',
@@ -285,7 +285,7 @@ export class PortalCommunicationManager {
     await this.installNodeJs(hostname, baseDir);
 
     // Upload bundled daemon and CLI files
-    const daemonSource = path.join(distDir, 'daemon-bundled.js');
+    const daemonSource = path.join(distDir, 'daemon-bundled.cjs');
     const cliSource = path.join(distDir, 'theoldswitcheroo-bundled.cjs');
 
     if (!fs.existsSync(daemonSource)) {
@@ -297,7 +297,7 @@ export class PortalCommunicationManager {
     }
 
     // Upload daemon to base directory
-    await this.sshManager.uploadFile(hostname, daemonSource, `${baseDir}/daemon-bundled.js`);
+    await this.sshManager.uploadFile(hostname, daemonSource, `${baseDir}/daemon-bundled.cjs`);
 
     // Upload CLI tool to bin directory (with .cjs extension)
     await this.sshManager.uploadFile(hostname, cliSource, `${binDir}/theoldswitcheroo-bundled.cjs`);
@@ -312,7 +312,7 @@ exec "$HOME/.socratic-shell/theoldswitcheroo/nodejs/bin/node" "$HOME/.socratic-s
 ${wrapperScript}EOF`);
     
     // Make files executable
-    await this.sshManager.executeCommand(hostname, `chmod +x ${baseDir}/daemon-bundled.js ${binDir}/theoldswitcheroo-bundled.cjs ${binDir}/theoldswitcheroo`);
+    await this.sshManager.executeCommand(hostname, `chmod +x ${baseDir}/daemon-bundled.cjs ${binDir}/theoldswitcheroo-bundled.cjs ${binDir}/theoldswitcheroo`);
 
     console.log(`Deployed daemon files to ${hostname}`);
     console.log(`CLI tool available at: ${binDir}/theoldswitcheroo`);
