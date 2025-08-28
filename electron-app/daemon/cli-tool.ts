@@ -126,6 +126,40 @@ class TaskSpaceCLI {
       process.exit(1);
     }
   }
+
+  async logProgress(message: string, category: 'info' | 'warn' | 'error' | 'milestone' | 'question'): Promise<void> {
+    const progressMessage: TaskSpaceMessage = {
+      type: 'progress_log',
+      message,
+      category,
+      timestamp: new Date().toISOString()
+    };
+
+    try {
+      await this.sendMessage(progressMessage);
+      const emoji = { info: 'ℹ️', warn: '⚠️', error: '❌', milestone: '✅', question: '❓' }[category];
+      console.log(`✓ Progress logged: ${emoji} ${message}`);
+    } catch (error) {
+      console.error(`✗ Failed to log progress: ${error instanceof Error ? error.message : error}`);
+      process.exit(1);
+    }
+  }
+
+  async signalUser(message: string): Promise<void> {
+    const signalMessage: TaskSpaceMessage = {
+      type: 'user_signal',
+      message,
+      timestamp: new Date().toISOString()
+    };
+
+    try {
+      await this.sendMessage(signalMessage);
+      console.log(`✓ User signal sent: "${message}"`);
+    } catch (error) {
+      console.error(`✗ Failed to signal user: ${error instanceof Error ? error.message : error}`);
+      process.exit(1);
+    }
+  }
 }
 
 async function main(): Promise<void> {
@@ -177,6 +211,29 @@ async function main(): Promise<void> {
     .description('Get daemon and taskspace status')
     .action(async () => {
       await cli.status();
+    });
+
+  program
+    .command('log-progress')
+    .description('Log progress for the current taskspace')
+    .requiredOption('-m, --message <message>', 'Progress message')
+    .option('-c, --category <category>', 'Progress category: info, warn, error, milestone, question', 'info')
+    .action(async (options) => {
+      const validCategories = ['info', 'warn', 'error', 'milestone', 'question'];
+      if (!validCategories.includes(options.category)) {
+        console.error(`✗ Invalid category. Must be one of: ${validCategories.join(', ')}`);
+        process.exit(1);
+      }
+      
+      await cli.logProgress(options.message, options.category as any);
+    });
+
+  program
+    .command('signal-user')
+    .description('Send a signal to the user requesting help')
+    .requiredOption('-m, --message <message>', 'Help request message')
+    .action(async (options) => {
+      await cli.signalUser(options.message);
     });
 
   // Show help if no command provided

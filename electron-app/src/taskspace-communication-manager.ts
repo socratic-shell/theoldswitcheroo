@@ -36,6 +36,8 @@ export class TaskSpaceCommunicationManager {
     this.messageHandlers.set('new_taskspace_request', this.handleNewTaskSpaceRequest.bind(this));
     this.messageHandlers.set('update_taskspace', this.handleUpdateTaskSpace.bind(this));
     this.messageHandlers.set('status_request', this.handleStatusRequest.bind(this));
+    this.messageHandlers.set('progress_log', this.handleProgressLog.bind(this));
+    this.messageHandlers.set('user_signal', this.handleUserSignal.bind(this));
   }
 
   async startDaemon(hostname: string): Promise<void> {
@@ -230,6 +232,33 @@ export class TaskSpaceCommunicationManager {
     }
   }
 
+  private handleProgressLog(message: TaskSpaceMessage): void {
+    console.log('Progress log received:', message);
+
+    // Forward to main app for UI display
+    if (this.onProgressLog) {
+      this.onProgressLog({
+        message: message.message,
+        category: message.category,
+        timestamp: message.timestamp,
+        hostname: this.getCurrentHostname(message)
+      });
+    }
+  }
+
+  private handleUserSignal(message: TaskSpaceMessage): void {
+    console.log('User signal received:', message);
+
+    // Forward to main app for notification
+    if (this.onUserSignal) {
+      this.onUserSignal({
+        message: message.message,
+        timestamp: message.timestamp,
+        hostname: this.getCurrentHostname(message)
+      });
+    }
+  }
+
   private getCurrentHostname(message: TaskSpaceMessage): string {
     // Find which hostname this message came from
     for (const [hostname, process] of this.daemonProcesses) {
@@ -255,12 +284,33 @@ export class TaskSpaceCommunicationManager {
     activeTaskSpace?: string;
   };
 
+  private onProgressLog?: (log: {
+    message: string;
+    category: 'info' | 'warn' | 'error' | 'milestone' | 'question';
+    timestamp: string;
+    hostname: string;
+  }) => void;
+
+  private onUserSignal?: (signal: {
+    message: string;
+    timestamp: string;
+    hostname: string;
+  }) => void;
+
   setTaskSpaceRequestHandler(handler: typeof this.onTaskSpaceRequest): void {
     this.onTaskSpaceRequest = handler;
   }
 
   setStatusRequestHandler(handler: typeof this.onStatusRequest): void {
     this.onStatusRequest = handler;
+  }
+
+  setProgressLogHandler(handler: typeof this.onProgressLog): void {
+    this.onProgressLog = handler;
+  }
+
+  setUserSignalHandler(handler: typeof this.onUserSignal): void {
+    this.onUserSignal = handler;
   }
 
   async sendMessage(hostname: string, message: TaskSpaceMessage): Promise<void> {

@@ -132,6 +132,96 @@ describe('TaskSpace CLI Tool', () => {
 
     expect(stderrData).toContain('No active theoldswitcheroo instance found');
   });
+
+  test('CLI tool sends log-progress message', async () => {
+    // Capture daemon stdout
+    let stdoutData = '';
+    daemonProcess.stdout?.on('data', (data) => {
+      stdoutData += data.toString();
+    });
+
+    // Run CLI tool
+    const cliProcess = spawn('node', [
+      bundledCliPath,
+      'log-progress',
+      '--message', 'Completed authentication setup',
+      '--category', 'milestone'
+    ], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, THEOLDSWITCHEROO_SOCKET: testSocketPath }
+    });
+
+    let cliStdout = '';
+    cliProcess.stdout?.on('data', (data) => {
+      cliStdout += data.toString();
+    });
+
+    // Wait for CLI to complete
+    const exitCode = await new Promise<number>((resolve, reject) => {
+      cliProcess.on('close', (code) => {
+        resolve(code || 0);
+      });
+
+      setTimeout(() => {
+        reject(new Error('CLI timeout'));
+      }, 10000);
+    });
+
+    expect(exitCode).toBe(0);
+    expect(cliStdout).toContain('Progress logged: ✅ Completed authentication setup');
+    
+    // Give daemon time to process message
+    await new Promise(resolve => setTimeout(resolve, 200));
+    
+    // Check that message was forwarded to daemon stdout
+    expect(stdoutData).toContain('"type":"progress_log"');
+    expect(stdoutData).toContain('"message":"Completed authentication setup"');
+    expect(stdoutData).toContain('"category":"milestone"');
+  });
+
+  test('CLI tool sends signal-user message', async () => {
+    // Capture daemon stdout
+    let stdoutData = '';
+    daemonProcess.stdout?.on('data', (data) => {
+      stdoutData += data.toString();
+    });
+
+    // Run CLI tool
+    const cliProcess = spawn('node', [
+      bundledCliPath,
+      'signal-user',
+      '--message', 'Need help with database configuration'
+    ], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, THEOLDSWITCHEROO_SOCKET: testSocketPath }
+    });
+
+    let cliStdout = '';
+    cliProcess.stdout?.on('data', (data) => {
+      cliStdout += data.toString();
+    });
+
+    // Wait for CLI to complete
+    const exitCode = await new Promise<number>((resolve, reject) => {
+      cliProcess.on('close', (code) => {
+        resolve(code || 0);
+      });
+
+      setTimeout(() => {
+        reject(new Error('CLI timeout'));
+      }, 10000);
+    });
+
+    expect(exitCode).toBe(0);
+    expect(cliStdout).toContain('User signal sent: "Need help with database configuration"');
+    
+    // Give daemon time to process message
+    await new Promise(resolve => setTimeout(resolve, 200));
+    
+    // Check that message was forwarded to daemon stdout
+    expect(stdoutData).toContain('"type":"user_signal"');
+    expect(stdoutData).toContain('"message":"Need help with database configuration"');
+  });
 });
 
 function waitForSocket(socketPath: string, timeout: number = 5000): Promise<void> {
