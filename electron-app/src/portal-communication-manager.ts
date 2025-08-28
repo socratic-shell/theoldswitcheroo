@@ -304,9 +304,7 @@ export class PortalCommunicationManager {
     
     // Create wrapper script that uses our Node.js with absolute paths
     const wrapperScript = `#!/bin/bash
-# Get the home directory dynamically
-HOME_DIR="$(eval echo ~$(whoami))"
-exec "\${HOME_DIR}/.socratic-shell/theoldswitcheroo/nodejs/bin/node" "\${HOME_DIR}/.socratic-shell/theoldswitcheroo/bin/theoldswitcheroo-bundled.cjs" "$@"
+exec "$HOME/.socratic-shell/theoldswitcheroo/nodejs/bin/node" "$HOME/.socratic-shell/theoldswitcheroo/bin/theoldswitcheroo-bundled.cjs" "$@"
 `;
     
     // Write wrapper script
