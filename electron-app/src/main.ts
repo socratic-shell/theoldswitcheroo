@@ -750,8 +750,7 @@ class SwitcherooApp {
         
         ${allExtensionCommands ? `# Install extensions\n        ${allExtensionCommands}\n        ` : ''}
         # Start VSCode with data directories and dynamic port, opening the cloned project
-        # Set PATH environment variable so it gets inherited by integrated terminals
-        PATH="${BASE_DIR}/bin:$PATH" ./openvscode-server/bin/openvscode-server \\
+        ./openvscode-server/bin/openvscode-server \\
           --host 0.0.0.0 \\
           --port 0 \\
           --user-data-dir ${BASE_DIR}/vscode-user-data \\
