@@ -302,9 +302,11 @@ export class PortalCommunicationManager {
     // Upload CLI tool to bin directory (with .cjs extension)
     await this.sshManager.uploadFile(hostname, cliSource, `${binDir}/theoldswitcheroo-bundled.cjs`);
     
-    // Create wrapper script that uses our Node.js
+    // Create wrapper script that uses our Node.js with absolute paths
     const wrapperScript = `#!/bin/bash
-exec "${baseDir}/nodejs/bin/node" "${binDir}/theoldswitcheroo-bundled.cjs" "$@"
+# Get the home directory dynamically
+HOME_DIR="$(eval echo ~$(whoami))"
+exec "\${HOME_DIR}/.socratic-shell/theoldswitcheroo/nodejs/bin/node" "\${HOME_DIR}/.socratic-shell/theoldswitcheroo/bin/theoldswitcheroo-bundled.cjs" "$@"
 `;
     
     // Write wrapper script
