@@ -6,6 +6,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
+// Helper function to extract UUID from current working directory path
+function extractUuidFromPath(cwd: string): string | null {
+  // Look for UUID pattern in the path (e.g., /path/to/portals/uuid-here/clone)
+  const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+  const match = cwd.match(uuidRegex);
+  return match ? match[0] : null;
+}
+
 interface PortalMessage {
   type: string;
   timestamp: string;
@@ -144,12 +152,21 @@ async function main(): Promise<void> {
 
   program
     .command('update-portal')
-    .description('Update an existing portal')
-    .requiredOption('-u, --uuid <uuid>', 'Portal UUID')
+    .description('Update an existing portal (uses UUID from current directory)')
     .option('-d, --description <description>', 'New description')
     .option('-n, --name <name>', 'New name')
     .action(async (options) => {
-      await cli.updatePortal(options.uuid, {
+      // Extract UUID from current working directory
+      const cwd = process.cwd();
+      const uuid = extractUuidFromPath(cwd);
+      
+      if (!uuid) {
+        console.error('✗ Could not determine portal UUID from current directory');
+        console.error('  Make sure you are running this command from within a portal directory');
+        process.exit(1);
+      }
+      
+      await cli.updatePortal(uuid, {
         description: options.description,
         name: options.name
       });
