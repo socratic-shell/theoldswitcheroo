@@ -72,7 +72,7 @@ export class PortalCommunicationManager {
       }
 
       // Start daemon via SSH
-      const daemonCommand = `cd ${baseDir} && node daemon-bundled.js --socket-path ${socketPath}`;
+      const daemonCommand = `cd ${baseDir} && ./nodejs/bin/node daemon-bundled.js --socket-path ${socketPath}`;
       const daemonProcess = spawn('ssh', [
         '-o', 'ControlMaster=no',
         '-o', 'ControlPath=none',
@@ -281,6 +281,9 @@ export class PortalCommunicationManager {
     // Ensure directories exist
     await this.sshManager.executeCommand(hostname, `mkdir -p ${binDir}`);
 
+    // Install Node.js if not already present
+    await this.installNodeJs(hostname, baseDir);
+
     // Upload bundled daemon and CLI files
     const daemonSource = path.join(distDir, 'daemon-bundled.js');
     const cliSource = path.join(distDir, 'theoldswitcheroo-bundled.cjs');
@@ -305,6 +308,54 @@ export class PortalCommunicationManager {
     console.log(`Deployed daemon files to ${hostname}`);
     console.log(`CLI tool available at: ${binDir}/theoldswitcheroo`);
     console.log(`PATH will be set by theoldswitcheroo extension`);
+  }
+
+  private async installNodeJs(hostname: string, baseDir: string): Promise<void> {
+    const nodeDir = `${baseDir}/nodejs`;
+    
+    // Check if Node.js is already installed
+    const checkResult = await this.sshManager.executeCommand(
+      hostname, 
+      `test -f ${nodeDir}/bin/node && echo "exists" || echo "missing"`
+    );
+    
+    if (checkResult.trim() === 'exists') {
+      console.log('Node.js already installed');
+      return;
+    }
+    
+    console.log('Installing Node.js...');
+    
+    // Detect architecture
+    const archResult = await this.sshManager.executeCommand(hostname, 'uname -m');
+    const arch = archResult.trim();
+    
+    // Map architecture to Node.js download names
+    let nodeArch: string;
+    if (arch === 'x86_64' || arch === 'amd64') {
+      nodeArch = 'x64';
+    } else if (arch === 'aarch64' || arch === 'arm64') {
+      nodeArch = 'arm64';
+    } else if (arch.startsWith('arm')) {
+      nodeArch = 'armv7l';
+    } else {
+      throw new Error(`Unsupported architecture: ${arch}`);
+    }
+    
+    // Download and extract Node.js
+    const nodeVersion = 'v20.11.0'; // LTS version
+    const nodeUrl = `https://nodejs.org/dist/${nodeVersion}/node-${nodeVersion}-linux-${nodeArch}.tar.xz`;
+    
+    const installScript = `
+      cd ${baseDir}
+      curl -L ${nodeUrl} | tar -xJ
+      mv node-${nodeVersion}-linux-${nodeArch} nodejs
+      chmod +x nodejs/bin/node
+      echo "Node.js installed successfully"
+    `;
+    
+    await this.sshManager.executeCommand(hostname, installScript);
+    console.log(`✓ Node.js ${nodeVersion} installed for ${nodeArch}`);
   }
 
   async deployAdditionalTools(hostname: string, tools: Array<{ localPath: string; remoteName: string }>): Promise<void> {
