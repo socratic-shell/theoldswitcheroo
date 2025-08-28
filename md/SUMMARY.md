@@ -13,8 +13,8 @@
 
 <!-- Describes how we manage the SSH connection(s) to the host -->
 - [SSH connection handling](./ssh-connection-handling.md)
-<!-- Describes the daemon-based communication system between portals and Electron app -->
-- [Portal communication architecture](./portal-communication-architecture.md)
+<!-- Describes the daemon-based communication system between taskspaces and Electron app -->
+- [TaskSpace communication architecture](./taskspace-communication-architecture.md)
 
 # Reference Material
 
@@ -47,6 +47,6 @@ Please read them as needed to get up to speed on particular topics.
 <!-- This document provides comprehensive guidance for VSCode server multi-session architecture using data directory flags and symlink strategies. Content includes: --user-data-dir vs --server-data-dir separation, extensions directory management, directory structuring for shared settings with isolated workspace state, setup scripts for session creation, and implementation patterns for replicating local "File → New Window" behavior remotely. Use this for: solving session persistence issues, implementing multi-session data strategies, sharing user preferences across sessions while maintaining workspace isolation. -->
 - [VSCode Server Multi-Session Architecture Guide](./references/vscode-multi-session-architecture-guide.md)
 
-OpenVSCode Server provides robust extension management through `--install-extension` flags that support marketplace IDs, local .vsix files, and remote URLs. Each multiplexer portal requires isolated `--user-data-dir` and `--extensions-dir` directories for complete separation. Extensions can be pre-installed at runtime (not during Docker builds due to missing IPC hooks), and custom .vsix files work seamlessly alongside marketplace extensions when deployed to each portal's isolated extension directory.
+OpenVSCode Server provides robust extension management through `--install-extension` flags that support marketplace IDs, local .vsix files, and remote URLs. Each multiplexer taskspace requires isolated `--user-data-dir` and `--extensions-dir` directories for complete separation. Extensions can be pre-installed at runtime (not during Docker builds due to missing IPC hooks), and custom .vsix files work seamlessly alongside marketplace extensions when deployed to each taskspace's isolated extension directory.
 
 - [Installing VSCode Extensions](./references/installing-vscode-extensions.md)

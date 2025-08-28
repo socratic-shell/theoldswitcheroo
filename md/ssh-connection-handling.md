@@ -152,13 +152,13 @@ class SSHConnectionManager {
 }
 ```
 
-### Integration with Portal Management
+### Integration with TaskSpace Management
 
-The SSH connection manager integrates with the portal lifecycle:
+The SSH connection manager integrates with the taskspace lifecycle:
 
-1. **Portal Creation**: Establish master connection to target host
+1. **TaskSpace Creation**: Establish master connection to target host
 2. **Server Operations**: Use multiplexed connections for all SSH/SCP operations
-3. **Portal Cleanup**: Master connection persists (may be reused by other portals)
+3. **TaskSpace Cleanup**: Master connection persists (may be reused by other taskspaces)
 4. **App Shutdown**: Clean up all master connections
 
 ## Performance Benefits

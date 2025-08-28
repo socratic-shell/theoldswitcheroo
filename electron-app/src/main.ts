@@ -6,9 +6,9 @@ import * as http from 'http';
 import { spawn, ChildProcess } from 'child_process';
 import { randomUUID } from 'crypto';
 import { fileURLToPath } from 'url';
-import { LOCAL_DATA_DIR, PORTALS_FILE, SETTINGS_FILE, BASE_DIR, loadSettings, saveSettings, Settings } from './settings.js';
+import { LOCAL_DATA_DIR, TASKSPACES_FILE, SETTINGS_FILE, BASE_DIR, loadSettings, saveSettings, Settings } from './settings.js';
 import { sshManager } from './ssh-manager.js';
-import { PortalCommunicationManager } from './portal-communication-manager.js';
+import { TaskSpaceCommunicationManager } from './taskspace-communication-manager.js';
 
 // ES6 module equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -30,7 +30,7 @@ interface ILoadingView {
   getView(): WebContentsView;
 }
 
-interface SavedPortalDatum {
+interface SavedTaskSpaceDatum {
   uuid: string;
   name: string;
   port: number;
@@ -39,10 +39,10 @@ interface SavedPortalDatum {
   extensions: Extensions;
 }
 
-interface SavedPortalData {
+interface SavedTaskSpaceData {
   hostname: string | null;
-  activePortalUuid?: string | null;
-  portals: SavedPortalDatum[];
+  activeTaskSpaceUuid?: string | null;
+  taskspaces: SavedTaskSpaceDatum[];
 }
 
 // Generate UUID v4
@@ -50,7 +50,7 @@ function generateUUID(): string {
   return randomUUID();
 }
 
-class PortalPaths {
+class TaskSpacePaths {
   dir: string;
   cloneDir: string;
   serverDataDir: string;
@@ -58,11 +58,11 @@ class PortalPaths {
   freshClone: string;
 
   constructor(uuid: string) {
-    this.dir = `portals/${uuid}`;
-    this.cloneDir = `portals/${uuid}/clone`;
-    this.serverDataDir = `portals/portal-${uuid}/server-data`;
-    this.extensionsDir = `portals/portal-${uuid}/extensions`;
-    this.freshClone = `portals/${uuid}/fresh-clone.sh`;
+    this.dir = `taskspaces/${uuid}`;
+    this.cloneDir = `taskspaces/${uuid}/clone`;
+    this.serverDataDir = `taskspaces/taskspace-${uuid}/server-data`;
+    this.extensionsDir = `taskspaces/taskspace-${uuid}/extensions`;
+    this.freshClone = `taskspaces/${uuid}/fresh-clone.sh`;
   }
 }
 
@@ -162,8 +162,8 @@ if (cleanIndex !== -1 && cleanIndex + 1 < args.length) {
 }
 
 class SwitcherooApp {
-  portals: Portal[] = [];
-  activePortalUuid: string | null = null;
+  taskspaces: TaskSpace[] = [];
+  activeTaskSpaceUuid: string | null = null;
   hostname: string;
   loadingView: ILoadingView;
   errorView: ErrorView;
@@ -172,22 +172,22 @@ class SwitcherooApp {
   sidebarView!: WebContentsView;
   mainView: WebContentsView | null = null;
   sidebarWidth: number = 250; // Track sidebar width
-  portalManager: PortalCommunicationManager; // Add portal communication manager
+  taskspaceManager: TaskSpaceCommunicationManager; // Add taskspace communication manager
 
   constructor(hostname: string) {
     // Global session management
-    this.portals = [];
-    this.activePortalUuid = null;
+    this.taskspaces = [];
+    this.activeTaskSpaceUuid = null;
     this.hostname = hostname;
     this.loadingView = new LoadingView();
     this.errorView = new ErrorView();
 
-    // Initialize portal communication manager
-    this.portalManager = new PortalCommunicationManager(sshManager);
+    // Initialize taskspace communication manager
+    this.taskspaceManager = new TaskSpaceCommunicationManager(sshManager);
 
-    // Set up portal request handlers
-    this.portalManager.setPortalRequestHandler(this.handlePortalRequest.bind(this));
-    this.portalManager.setStatusRequestHandler(this.handleStatusRequest.bind(this));
+    // Set up taskspace request handlers
+    this.taskspaceManager.setTaskSpaceRequestHandler(this.handleTaskSpaceRequest.bind(this));
+    this.taskspaceManager.setStatusRequestHandler(this.handleStatusRequest.bind(this));
 
     // Create a persistent session for this hostname (shared across all sessions)
     // and initialize it for vscode compatibility.
@@ -232,9 +232,9 @@ class SwitcherooApp {
 
     // Initialize the main IPC handlers. These will receive various
     // messages from the other views.
-    ipcMain.handle('create-portal', async () => await this.handleCreatePortal());
-    ipcMain.handle('toggle-view', async (_event, portalUuid) => await this.handleToggleViewMessage(portalUuid));
-    ipcMain.handle('switch-portal', async (_event, portalUuid) => await this.handleSwitchPortalMessage(portalUuid));
+    ipcMain.handle('create-taskspace', async () => await this.handleCreateTaskSpace());
+    ipcMain.handle('toggle-view', async (_event, taskspaceUuid) => await this.handleToggleViewMessage(taskspaceUuid));
+    ipcMain.handle('switch-taskspace', async (_event, taskspaceUuid) => await this.handleSwitchTaskSpaceMessage(taskspaceUuid));
     ipcMain.handle('resize-sidebar', async (_event, newWidth) => await this.handleSidebarResize(newWidth));
     ipcMain.handle('toggle-devtools', async () => {
       this.sidebarView.webContents.toggleDevTools();
@@ -245,7 +245,7 @@ class SwitcherooApp {
     ipcMain.handle('setup-host', async (_event, hostname) => await this.handleSetupHost(hostname));
     ipcMain.handle('start-daemon', async (_event, hostname) => await this.handleStartDaemon(hostname));
     ipcMain.handle('stop-daemon', async (_event, hostname) => await this.handleStopDaemon(hostname));
-    ipcMain.handle('get-daemon-status', (_event, hostname) => this.portalManager.isRunning(hostname));
+    ipcMain.handle('get-daemon-status', (_event, hostname) => this.taskspaceManager.isRunning(hostname));
     ipcMain.handle('quit-app', () => {
       app.quit();
     });
@@ -271,39 +271,39 @@ class SwitcherooApp {
 
       // Start daemon for this hostname
       this.loadingView.updateMessage('Starting communication daemon...');
-      await this.portalManager.deployDaemonFiles(this.hostname);
-      await this.portalManager.startDaemon(this.hostname);
+      await this.taskspaceManager.deployDaemonFiles(this.hostname);
+      await this.taskspaceManager.startDaemon(this.hostname);
       this.log('✓ Daemon started successfully');
       this.log('✓ CLI tool available in terminals as: theoldswitcheroo');
 
-      // Load existing portals
-      this.loadingView.updateMessage('Checking for existing portals...');
-      this.log('Checking for existing portals...');
-      const savedPortalData = this.loadPortalData();
+      // Load existing taskspaces
+      this.loadingView.updateMessage('Checking for existing taskspaces...');
+      this.log('Checking for existing taskspaces...');
+      const savedTaskSpaceData = this.loadTaskSpaceData();
 
       // If there is savedData, restore it
-      if (savedPortalData.hostname === this.hostname && savedPortalData.portals.length > 0) {
-        this.loadingView.updateMessage('Restoring saved portals...');
-        await this.restoreSavedPortals(savedPortalData);
-        this.notifyPortalsChanged();
+      if (savedTaskSpaceData.hostname === this.hostname && savedTaskSpaceData.taskspaces.length > 0) {
+        this.loadingView.updateMessage('Restoring saved taskspaces...');
+        await this.restoreSavedTaskSpaces(savedTaskSpaceData);
+        this.notifyTaskSpacesChanged();
       }
 
-      // Make sure there is at least one portal
-      if (this.portals.length == 0) {
-        this.loadingView.updateMessage('Creating initial portal...');
-        this.log(`Creating initial portal`);
-        const portal = await this.createNewPortal(this.loadingView);
-        this.log(`✓ Portal ${portal.name}: Started on port ${portal.port}`);
+      // Make sure there is at least one taskspace
+      if (this.taskspaces.length == 0) {
+        this.loadingView.updateMessage('Creating initial taskspace...');
+        this.log(`Creating initial taskspace`);
+        const taskspace = await this.createNewTaskSpace(this.loadingView);
+        this.log(`✓ TaskSpace ${taskspace.name}: Started on port ${taskspace.port}`);
       }
 
-      // Make sure *some* portal is selected
-      if (!this.activePortalUuid || !this.portalWithUuid(this.activePortalUuid)) {
-        this.activePortalUuid = this.portals[0].uuid;
+      // Make sure *some* taskspace is selected
+      if (!this.activeTaskSpaceUuid || !this.taskspaceWithUuid(this.activeTaskSpaceUuid)) {
+        this.activeTaskSpaceUuid = this.taskspaces[0].uuid;
       }
 
-      // Select the active portal
+      // Select the active taskspace
       this.loadingView.updateMessage('Loading VSCode...');
-      await this.switchPortal(this.portalWithUuid(this.activePortalUuid));
+      await this.switchTaskSpace(this.taskspaceWithUuid(this.activeTaskSpaceUuid));
 
     } catch (error) {
       this.log(`Error during startup: ${error instanceof Error ? error.message : error}`);
@@ -337,22 +337,22 @@ class SwitcherooApp {
     this.updateViewBounds();
   }
 
-  /// Create a vscode server for portal with uuid and (optionally) a previous port.
-  async ensureVSCodeServer(portal) {
-    // If portal already has a running server, check if it's still alive
-    if (portal.port) {
-      if (await checkPortalHealth(this.hostname, portal.port)) {
-        this.log(`✓ Portal ${portal.name}: Server still running on port ${portal.port}`);
+  /// Create a vscode server for taskspace with uuid and (optionally) a previous port.
+  async ensureVSCodeServer(taskspace) {
+    // If taskspace already has a running server, check if it's still alive
+    if (taskspace.port) {
+      if (await checkTaskSpaceHealth(this.hostname, taskspace.port)) {
+        this.log(`✓ TaskSpace ${taskspace.name}: Server still running on port ${taskspace.port}`);
         // Ensure port forwarding is active
-        this.forwardPort(portal.port);
+        this.forwardPort(taskspace.port);
         return; // Server is good
       } else {
-        this.log(`Portal ${portal.name}: Server died, restarting...`);
+        this.log(`TaskSpace ${taskspace.name}: Server died, restarting...`);
       }
     }
 
     // Start fresh server
-    this.log(`Starting VSCode server for portal ${portal.name}...`);
+    this.log(`Starting VSCode server for taskspace ${taskspace.name}...`);
 
     // Detect architecture
     const archOutput = await execSSHCommand(this.hostname, 'uname -m');
@@ -362,15 +362,15 @@ class SwitcherooApp {
     await installVSCodeServer(this.hostname, arch);
 
     // Start server
-    const serverInfo = await this.startVSCodeServer(this.hostname, portal.uuid, portal.name, portal.extensions);
+    const serverInfo = await this.startVSCodeServer(this.hostname, taskspace.uuid, taskspace.name, taskspace.extensions);
 
-    // Update port on the portal
-    portal.port = serverInfo.port;
+    // Update port on the taskspace
+    taskspace.port = serverInfo.port;
 
     // Start port forwarding
     this.forwardPort(serverInfo.port);
 
-    this.log(`✓ Portal ${portal.name}: Server ready on port ${portal.port}`);
+    this.log(`✓ TaskSpace ${taskspace.name}: Server ready on port ${taskspace.port}`);
   }
 
   /// Log messages to console
@@ -379,17 +379,17 @@ class SwitcherooApp {
   }
 
   /// Handles a new session message from the sidebar
-  async handleCreatePortal() {
+  async handleCreateTaskSpace() {
     console.log('+ button clicked! Creating new session...');
 
     try {
-      const newPortal = await this.createNewPortal();
-      console.log('newPortal created', newPortal);
+      const newTaskSpace = await this.createNewTaskSpace();
+      console.log('newTaskSpace created', newTaskSpace);
       return {
         success: true,
-        uuid: newPortal.uuid,
-        name: newPortal.name,
-        port: newPortal.port
+        uuid: newTaskSpace.uuid,
+        name: newTaskSpace.name,
+        port: newTaskSpace.port
       };
     } catch (error) {
       return {
@@ -399,39 +399,39 @@ class SwitcherooApp {
     }
   }
 
-  portalWithUuid(portalUuid): Portal {
-    return this.portals.find(s => s.uuid === portalUuid);
+  taskspaceWithUuid(taskspaceUuid): TaskSpace {
+    return this.taskspaces.find(s => s.uuid === taskspaceUuid);
   }
 
-  /// Handles a switch portal from the sidebar
-  async handleSwitchPortalMessage(portalUuid) {
-    this.log(`Switching to portal ${portalUuid}`);
+  /// Handles a switch taskspace from the sidebar
+  async handleSwitchTaskSpaceMessage(taskspaceUuid) {
+    this.log(`Switching to taskspace ${taskspaceUuid}`);
 
-    const portal = this.portalWithUuid(portalUuid);
-    if (!portal) {
-      return { success: false, error: `Portal ${portalUuid} not found` };
+    const taskspace = this.taskspaceWithUuid(taskspaceUuid);
+    if (!taskspace) {
+      return { success: false, error: `TaskSpace ${taskspaceUuid} not found` };
     }
 
     try {
-      await this.switchPortal(portal);
+      await this.switchTaskSpace(taskspace);
       return { success: true };
     } catch (error) {
       return { success: false, error: error.message };
     }
   }
 
-  async switchPortal(portal) {
-    this.log(`switchPortal ${portal}`);
+  async switchTaskSpace(taskspace) {
+    this.log(`switchTaskSpace ${taskspace}`);
 
     // Show loading view immediately
     this.setMainView(this.loadingView.getView());
     this.loadingView.updateMessage('Starting VSCode server...');
 
-    let view = await portal.ensureView(this, this.loadingView);
+    let view = await taskspace.ensureView(this, this.loadingView);
     this.setMainView(view);
-    this.activePortalUuid = portal.uuid;
+    this.activeTaskSpaceUuid = taskspace.uuid;
 
-    this.notifyPortalsChanged();
+    this.notifyTaskSpacesChanged();
   }
 
   /// Handles sidebar resize from the sidebar
@@ -446,10 +446,10 @@ class SwitcherooApp {
   async handleSetupHost(hostname: string) {
     try {
       // Deploy daemon files (includes CLI tool in bin directory)
-      await this.portalManager.deployDaemonFiles(hostname);
+      await this.taskspaceManager.deployDaemonFiles(hostname);
 
       // TODO: Deploy additional tools if needed
-      // await this.portalManager.deployAdditionalTools(hostname, [
+      // await this.taskspaceManager.deployAdditionalTools(hostname, [
       //   { localPath: '/path/to/other/tool', remoteName: 'tool-name' }
       // ]);
 
@@ -462,7 +462,7 @@ class SwitcherooApp {
   /// Handles daemon start for a host
   async handleStartDaemon(hostname: string) {
     try {
-      await this.portalManager.startDaemon(hostname);
+      await this.taskspaceManager.startDaemon(hostname);
       return { success: true };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) };
@@ -472,74 +472,74 @@ class SwitcherooApp {
   /// Handles daemon stop for a host
   async handleStopDaemon(hostname: string) {
     try {
-      await this.portalManager.stopDaemon(hostname);
+      await this.taskspaceManager.stopDaemon(hostname);
       return { success: true };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   }
 
-  /// Handle portal requests from CLI tools via daemon
-  private handlePortalRequest(request: {
-    type: 'new_portal' | 'update_portal';
+  /// Handle taskspace requests from CLI tools via daemon
+  private handleTaskSpaceRequest(request: {
+    type: 'new_taskspace' | 'update_taskspace';
     name?: string;
     description?: string;
     cwd?: string;
     uuid?: string;
     hostname: string;
   }): void {
-    if (request.type === 'new_portal' && request.name) {
-      // Create new portal using existing system
-      this.createNewPortalFromCLI(request.name, request.description || '', request.cwd || '/tmp', request.hostname);
-    } else if (request.type === 'update_portal' && request.uuid) {
-      // Update existing portal
-      this.updatePortalFromCLI(request.uuid, request.name, request.description);
+    if (request.type === 'new_taskspace' && request.name) {
+      // Create new taskspace using existing system
+      this.createNewTaskSpaceFromCLI(request.name, request.description || '', request.cwd || '/tmp', request.hostname);
+    } else if (request.type === 'update_taskspace' && request.uuid) {
+      // Update existing taskspace
+      this.updateTaskSpaceFromCLI(request.uuid, request.name, request.description);
     }
   }
 
   /// Handle status requests from CLI tools
   private handleStatusRequest(hostname: string) {
     return {
-      portals: this.portals.map(portal => ({
-        name: portal.name,
-        status: portal.uuid === this.activePortalUuid ? 'active' : 'inactive',
-        uuid: portal.uuid
+      taskspaces: this.taskspaces.map(taskspace => ({
+        name: taskspace.name,
+        status: taskspace.uuid === this.activeTaskSpaceUuid ? 'active' : 'inactive',
+        uuid: taskspace.uuid
       })),
-      activePortal: this.activePortalUuid || undefined
+      activeTaskSpace: this.activeTaskSpaceUuid || undefined
     };
   }
 
-  /// Create portal from CLI request
-  private async createNewPortalFromCLI(name: string, description: string, cwd: string, hostname: string): Promise<void> {
+  /// Create taskspace from CLI request
+  private async createNewTaskSpaceFromCLI(name: string, description: string, cwd: string, hostname: string): Promise<void> {
     try {
-      console.log(`Creating portal from CLI: ${name} on ${hostname}`);
+      console.log(`Creating taskspace from CLI: ${name} on ${hostname}`);
 
-      // Use existing portal creation logic but with CLI-provided details
-      const portal = await this.createNewPortal();
+      // Use existing taskspace creation logic but with CLI-provided details
+      const taskspace = await this.createNewTaskSpace();
 
-      // Update portal with CLI details
-      portal.name = name;
-      // Note: description and cwd would need to be added to Portal class
+      // Update taskspace with CLI details
+      taskspace.name = name;
+      // Note: description and cwd would need to be added to TaskSpace class
 
-      this.notifyPortalsChanged();
+      this.notifyTaskSpacesChanged();
 
-      console.log(`✓ Created portal ${name} from CLI request`);
+      console.log(`✓ Created taskspace ${name} from CLI request`);
     } catch (error) {
-      console.error(`Failed to create portal from CLI:`, error);
+      console.error(`Failed to create taskspace from CLI:`, error);
     }
   }
 
-  /// Update portal from CLI request
-  private updatePortalFromCLI(uuid: string, name?: string, description?: string): void {
-    const portal = this.portalWithUuid(uuid);
-    if (portal) {
-      if (name) portal.name = name;
-      // Note: description would need to be added to Portal class
+  /// Update taskspace from CLI request
+  private updateTaskSpaceFromCLI(uuid: string, name?: string, description?: string): void {
+    const taskspace = this.taskspaceWithUuid(uuid);
+    if (taskspace) {
+      if (name) taskspace.name = name;
+      // Note: description would need to be added to TaskSpace class
 
-      this.notifyPortalsChanged();
-      console.log(`✓ Updated portal ${uuid} from CLI request`);
+      this.notifyTaskSpacesChanged();
+      console.log(`✓ Updated taskspace ${uuid} from CLI request`);
     } else {
-      console.warn(`Portal ${uuid} not found for update`);
+      console.warn(`TaskSpace ${uuid} not found for update`);
     }
   }
 
@@ -550,71 +550,71 @@ class SwitcherooApp {
   }
 
   /// Handles a toggle view message from the sidebar
-  async handleToggleViewMessage(portalUuid) {
-    this.log(`Toggle meta-view for portal ${portalUuid}`);
+  async handleToggleViewMessage(taskspaceUuid) {
+    this.log(`Toggle meta-view for taskspace ${taskspaceUuid}`);
 
-    const portal = this.portalWithUuid(portalUuid);
-    if (!portal) {
-      return { success: false, error: `Portal ${portalUuid} not found` };
+    const taskspace = this.taskspaceWithUuid(taskspaceUuid);
+    if (!taskspace) {
+      return { success: false, error: `TaskSpace ${taskspaceUuid} not found` };
     }
 
-    portal.toggleView();
+    taskspace.toggleView();
     return { success: true };
   }
 
-  async createNewPortal(loadingView: ILoadingView | null = null) {
+  async createNewTaskSpace(loadingView: ILoadingView | null = null) {
     const uuid = generateUUID();
-    const name = `P${this.portals.length}`;
+    const name = `P${this.taskspaces.length}`;
 
     // Create directory and clone project
-    if (loadingView) loadingView.updateMessage(`Creating portal ${name}...`);
-    const extensions = await this.createPortalDirectory(uuid, name, loadingView);
+    if (loadingView) loadingView.updateMessage(`Creating taskspace ${name}...`);
+    const extensions = await this.createTaskSpaceDirectory(uuid, name, loadingView);
 
-    // Create portal object with no server running yet
-    const portal = new Portal(uuid, name, this.hostname, 0, this, extensions);
-    portal.extensions = extensions; // Store extensions on portal
-    this.portals.push(portal);
+    // Create taskspace object with no server running yet
+    const taskspace = new TaskSpace(uuid, name, this.hostname, 0, this, extensions);
+    taskspace.extensions = extensions; // Store extensions on taskspace
+    this.taskspaces.push(taskspace);
 
-    this.notifyPortalsChanged();
-    return portal;
+    this.notifyTaskSpacesChanged();
+    return taskspace;
   }
 
-  async restoreSavedPortals(savedPortalData: SavedPortalData) {
-    this.log(`Restoring previous session with ${savedPortalData.portals.length} existing portals`);
+  async restoreSavedTaskSpaces(savedTaskSpaceData: SavedTaskSpaceData) {
+    this.log(`Restoring previous session with ${savedTaskSpaceData.taskspaces.length} existing taskspaces`);
 
-    // Check directory existence for each saved portal
-    for (const savedPortalDatum of savedPortalData.portals) {
-      this.log(`Checking portal ${savedPortalDatum.name}...`);
+    // Check directory existence for each saved taskspace
+    for (const savedTaskSpaceDatum of savedTaskSpaceData.taskspaces) {
+      this.log(`Checking taskspace ${savedTaskSpaceDatum.name}...`);
 
-      // Check if portal clone directory still exists
-      const portalPaths = new PortalPaths(savedPortalDatum.uuid);
-      const portalCloneDir = `${BASE_DIR}/${portalPaths.cloneDir}`;
+      // Check if taskspace clone directory still exists
+      const taskspacePaths = new TaskSpacePaths(savedTaskSpaceDatum.uuid);
+      const taskspaceCloneDir = `${BASE_DIR}/${taskspacePaths.cloneDir}`;
       try {
-        await execSSHCommand(this.hostname, `test -d ${portalCloneDir}`);
-        this.log(`✓ Portal ${savedPortalDatum.name}: Directory exists`);
+        await execSSHCommand(this.hostname, `test -d ${taskspaceCloneDir}`);
+        this.log(`✓ TaskSpace ${savedTaskSpaceDatum.name}: Directory exists`);
 
-        // Create portal object with saved port (server status unknown)
-        const portal = new Portal(savedPortalDatum.uuid, savedPortalDatum.name, this.hostname, savedPortalDatum.port, this, savedPortalDatum.extensions);
-        this.portals.push(portal);
+        // Create taskspace object with saved port (server status unknown)
+        const taskspace = new TaskSpace(savedTaskSpaceDatum.uuid, savedTaskSpaceDatum.name, this.hostname, savedTaskSpaceDatum.port, this, savedTaskSpaceDatum.extensions);
+        this.taskspaces.push(taskspace);
       } catch (error) {
-        this.log(`✗ Portal ${savedPortalDatum.name}: Directory missing, removing from list`);
-        // Portal directory is gone, don't restore it
+        this.log(`✗ TaskSpace ${savedTaskSpaceDatum.name}: Directory missing, removing from list`);
+        // TaskSpace directory is gone, don't restore it
       }
     }
 
-    if (savedPortalData.activePortalUuid) {
-      this.activePortalUuid = savedPortalData.activePortalUuid;
+    if (savedTaskSpaceData.activeTaskSpaceUuid) {
+      this.activeTaskSpaceUuid = savedTaskSpaceData.activeTaskSpaceUuid;
     }
   }
 
-  /// Given a portal uuid + name, start the VSCode process and then connect to it.
+  /// Given a taskspace uuid + name, start the VSCode process and then connect to it.
   ///
-  /// Instantiates a `Portal` object and adds it to `this.portals`.
+  /// Instantiates a `TaskSpace` object and adds it to `this.taskspaces`.
   ///
-  /// This portal may have been newly created or may have been loaded from disk
+  /// This taskspace may have been newly created or may have been loaded from disk
   /// and encountered a missing server.
-  async createPortalDirectory(uuid: string, name: string, loadingView: ILoadingView | null = null): Promise<Extensions> {
-    this.log(`Creating directory and project for portal ${name} with uuid ${uuid}...`);
+  async createTaskSpaceDirectory(uuid: string, name: string, loadingView: ILoadingView | null = null): Promise<Extensions> {
+    this.log(`Creating directory and project for taskspace ${name} with uuid ${uuid}...`);
 
     // Test basic SSH connection first
     if (loadingView) loadingView.updateMessage(`Testing SSH connection for ${name}...`);
@@ -627,14 +627,14 @@ class SwitcherooApp {
     await execSSHCommand(this.hostname, `mkdir -p ${BASE_DIR}/`);
     this.log('✓ Remote directory ready');
 
-    // Clone project for this portal
-    const extensions = await this.cloneProjectForPortal(uuid, name, loadingView);
-    this.log(`✓ Project cloned for portal ${name}`);
+    // Clone project for this taskspace
+    const extensions = await this.cloneProjectForTaskSpace(uuid, name, loadingView);
+    this.log(`✓ Project cloned for taskspace ${name}`);
 
     return extensions;
   }
 
-  async cloneProjectForPortal(uuid: string, name: string, loadingView: ILoadingView | null = null): Promise<Extensions> {
+  async cloneProjectForTaskSpace(uuid: string, name: string, loadingView: ILoadingView | null = null): Promise<Extensions> {
     // For now, hardcode to theoldswitcheroo project
     const projectName = 'theoldswitcheroo';
     const projectDir = path.join(LOCAL_DATA_DIR, 'projects', projectName);
@@ -650,68 +650,68 @@ class SwitcherooApp {
     const totalCount = extensions.marketplace.length + extensions.local.length;
     this.log(`Found ${totalCount} extensions to install for ${name}`);
 
-    // Remote target directory for this portal
-    const portalPaths = new PortalPaths(uuid);
-    const remoteTargetDir = `${BASE_DIR}/${portalPaths.cloneDir}`;
+    // Remote target directory for this taskspace
+    const taskspacePaths = new TaskSpacePaths(uuid);
+    const remoteTargetDir = `${BASE_DIR}/${taskspacePaths.cloneDir}`;
 
-    // Create portal directory structure
-    if (loadingView) loadingView.updateMessage(`Creating portal ${name} directory...`);
-    await execSSHCommand(this.hostname, `mkdir -p ${BASE_DIR}/${portalPaths.dir}`);
+    // Create taskspace directory structure
+    if (loadingView) loadingView.updateMessage(`Creating taskspace ${name} directory...`);
+    await execSSHCommand(this.hostname, `mkdir -p ${BASE_DIR}/${taskspacePaths.dir}`);
 
-    // Upload the clone script to portal directory
+    // Upload the clone script to taskspace directory
     if (loadingView) loadingView.updateMessage(`Uploading clone script for ${name}...`);
-    const remoteScriptPath = `${BASE_DIR}/${portalPaths.freshClone}`;
+    const remoteScriptPath = `${BASE_DIR}/${taskspacePaths.freshClone}`;
     await execSCP(this.hostname, cloneScript, remoteScriptPath);
     await execSSHCommand(this.hostname, `chmod +x ${remoteScriptPath}`);
 
     // Run the clone script
-    if (loadingView) loadingView.updateMessage(`Cloning project for portal ${name}...`);
+    if (loadingView) loadingView.updateMessage(`Cloning project for taskspace ${name}...`);
     await execSSHCommand(this.hostname, `${remoteScriptPath} ${remoteTargetDir}`);
 
     return extensions;
   }
 
-  // Load portals JSON from disk
-  loadPortalData(): SavedPortalData {
+  // Load taskspaces JSON from disk
+  loadTaskSpaceData(): SavedTaskSpaceData {
     try {
-      if (fs.existsSync(PORTALS_FILE)) {
-        const data = fs.readFileSync(PORTALS_FILE, 'utf8');
+      if (fs.existsSync(TASKSPACES_FILE)) {
+        const data = fs.readFileSync(TASKSPACES_FILE, 'utf8');
         return JSON.parse(data);
       }
     } catch (error) {
       console.error('Failed to load sessions:', error.message);
     }
-    return { hostname: null, portals: [] };
+    return { hostname: null, taskspaces: [] };
   }
 
-  // Save portal JSON to disk
-  savePortalData() {
+  // Save taskspace JSON to disk
+  saveTaskSpaceData() {
     try {
-      const dir = path.dirname(PORTALS_FILE);
+      const dir = path.dirname(TASKSPACES_FILE);
       fs.mkdirSync(dir, { recursive: true });
 
       const data = {
         hostname: this.hostname,
-        activePortalUuid: this.activePortalUuid,
-        portals: this.portals.map(s => ({
+        activeTaskSpaceUuid: this.activeTaskSpaceUuid,
+        taskspaces: this.taskspaces.map(s => ({
           uuid: s.uuid,
           name: s.name,
           port: s.port,
-          serverDataDir: `${BASE_DIR}/${new PortalPaths(s.uuid).serverDataDir}`,
+          serverDataDir: `${BASE_DIR}/${new TaskSpacePaths(s.uuid).serverDataDir}`,
           lastSeen: new Date().toISOString()
         }))
       };
 
-      fs.writeFileSync(PORTALS_FILE, JSON.stringify(data, null, 2));
-      this.log(`Saved ${this.portals.length} portals to ${PORTALS_FILE}`);
+      fs.writeFileSync(TASKSPACES_FILE, JSON.stringify(data, null, 2));
+      this.log(`Saved ${this.taskspaces.length} taskspaces to ${TASKSPACES_FILE}`);
     } catch (error) {
       console.error('Failed to save sessions:', error.message);
     }
   }
 
-  /// Start a vscode server process for the given portal, connected to the given uuid, with the given name.
-  async startVSCodeServer(hostname: string, portalUuid: string, portalName: string, extensions: Extensions = { marketplace: [], local: [] }): Promise<ServerInfo> {
-    this.log(`Starting SSH with port forwarding for session ${portalName}...`);
+  /// Start a vscode server process for the given taskspace, connected to the given uuid, with the given name.
+  async startVSCodeServer(hostname: string, taskspaceUuid: string, taskspaceName: string, extensions: Extensions = { marketplace: [], local: [] }): Promise<ServerInfo> {
+    this.log(`Starting SSH with port forwarding for session ${taskspaceName}...`);
 
     // Upload local extensions if any
     if (extensions.local && extensions.local.length > 0) {
@@ -726,7 +726,7 @@ class SwitcherooApp {
 
     return new Promise((resolve, reject) => {
 
-      const dirs = new PortalPaths(portalUuid);
+      const dirs = new TaskSpacePaths(taskspaceUuid);
 
       // Build extension install commands
       const marketplaceCommands = extensions.marketplace?.length > 0
@@ -770,7 +770,7 @@ class SwitcherooApp {
 
         ssh.stdout.on('data', (data) => {
           const output = data.toString();
-          this.log(`[VSCode Server ${portalName}] ${output.trim()}`);
+          this.log(`[VSCode Server ${taskspaceName}] ${output.trim()}`);
 
           // Look for VSCode's port announcement in its output
           // VSCode typically outputs: "Web UI available at http://localhost:XXXX"
@@ -781,7 +781,7 @@ class SwitcherooApp {
 
           if (portMatch && !actualPort) {
             actualPort = parseInt(portMatch[1]);
-            this.log(`✓ VSCode server ${portalName} ready on port ${actualPort}`);
+            this.log(`✓ VSCode server ${taskspaceName} ready on port ${actualPort}`);
 
             resolve({ serverProcess: ssh, port: actualPort });
           }
@@ -789,11 +789,11 @@ class SwitcherooApp {
 
         ssh.stderr.on('data', (data) => {
           const output = data.toString().trim();
-          console.error(`[VSCode Server ${portalName} Error] ${output}`);
+          console.error(`[VSCode Server ${taskspaceName} Error] ${output}`);
         });
 
         ssh.on('close', (code) => {
-          this.log(`SSH process for session ${portalName} exited with code ${code}`);
+          this.log(`SSH process for session ${taskspaceName} exited with code ${code}`);
         });
 
         ssh.on('error', (err) => {
@@ -803,7 +803,7 @@ class SwitcherooApp {
         // Timeout if server doesn't start
         setTimeout(() => {
           if (!actualPort) {
-            reject(new Error(`VSCode server startup timeout for session ${portalName}`));
+            reject(new Error(`VSCode server startup timeout for session ${taskspaceName}`));
           }
         }, 60000); // 60 second timeout
       }).catch(reject);
@@ -816,19 +816,19 @@ class SwitcherooApp {
   }
 
 
-  // Update sidebar with current portals
-  notifyPortalsChanged() {
-    console.log(`Portals changed, activePortalUuid = ${this.activePortalUuid}`);
-    this.savePortalData();
-    const portalData = this.portals.map(portal => ({
-      uuid: portal.uuid,
-      name: portal.name,
-      active: portal.uuid === this.activePortalUuid
+  // Update sidebar with current taskspaces
+  notifyTaskSpacesChanged() {
+    console.log(`TaskSpaces changed, activeTaskSpaceUuid = ${this.activeTaskSpaceUuid}`);
+    this.saveTaskSpaceData();
+    const taskspaceData = this.taskspaces.map(taskspace => ({
+      uuid: taskspace.uuid,
+      name: taskspace.name,
+      active: taskspace.uuid === this.activeTaskSpaceUuid
     }));
-    console.log(`Posting message to sidecar`, portalData);
-    this.sidebarView.webContents.postMessage('update-portals', {
-      portalData: portalData,
-      activePortalUuid: this.activePortalUuid,
+    console.log(`Posting message to sidecar`, taskspaceData);
+    this.sidebarView.webContents.postMessage('update-taskspaces', {
+      taskspaceData: taskspaceData,
+      activeTaskSpaceUuid: this.activeTaskSpaceUuid,
     });
   }
 
@@ -845,8 +845,8 @@ class SwitcherooApp {
   }
 }
 
-/// A "Portal" is an active VSCode window.
-class Portal {
+/// A "TaskSpace" is an active VSCode window.
+class TaskSpace {
   uuid: string;
   name: string;
   hostname: string;
@@ -857,7 +857,7 @@ class Portal {
   metaView: WebContentsView | null = null;
   extensions!: Extensions;
 
-  /// Create Portal with the given uuid/name running on the given host.
+  /// Create TaskSpace with the given uuid/name running on the given host.
   ///
   /// If port is 0, then no port is assigned yet.
   ///
@@ -1068,7 +1068,7 @@ async function installVSCodeServer(hostname: string, arch: string): Promise<void
 }
 
 /// Check if the port is bound on the localhost
-async function checkPortalHealth(hostname: string, port: number): Promise<boolean> {
+async function checkTaskSpaceHealth(hostname: string, port: number): Promise<boolean> {
   let resultCode = await execSSHCommand(hostname, `/usr/bin/curl -sL -w %{http_code} http://localhost:${port} -o /dev/null || true`);
   return (resultCode == '200');
 }

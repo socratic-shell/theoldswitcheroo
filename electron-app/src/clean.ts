@@ -2,7 +2,7 @@
 
 import { spawn } from 'child_process';
 import { unlink } from 'fs/promises';
-import { loadSettings, PORTALS_FILE } from './settings.js';
+import { loadSettings, TASKSPACES_FILE } from './settings.js';
 
 const hostname = process.argv[2];
 
@@ -30,13 +30,13 @@ ssh.on('close', async (code) => {
   if (code === 0) {
     console.log(`Successfully cleaned ${targetHostname}`);
     
-    // Also delete local portals.json
+    // Also delete local taskspaces.json
     try {
-      await unlink(PORTALS_FILE);
-      console.log('Deleted local portals.json');
+      await unlink(TASKSPACES_FILE);
+      console.log('Deleted local taskspaces.json');
     } catch (error: any) {
       if (error.code !== 'ENOENT') {
-        console.log(`Warning: Could not delete local portals.json: ${error.message}`);
+        console.log(`Warning: Could not delete local taskspaces.json: ${error.message}`);
       }
     }
   } else {

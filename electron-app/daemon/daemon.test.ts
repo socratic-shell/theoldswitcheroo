@@ -3,7 +3,7 @@ import * as net from 'net';
 import * as fs from 'fs';
 import * as path from 'path';
 
-describe('Portal Daemon', () => {
+describe('TaskSpace Daemon', () => {
   let daemonProcess: ChildProcess;
   const testSocketPath = '/tmp/test-daemon.sock';
   const bundledDaemonPath = path.join(__dirname, '..', 'dist', 'daemon-bundled.cjs');

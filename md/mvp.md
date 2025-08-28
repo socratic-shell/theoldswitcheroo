@@ -14,7 +14,7 @@ Key:
     * [x] a `fresh-clone.sh` script that creates a fresh clone of the project (e.g., by executing `git clone`)
     * [x] a `vscode-extensions.json` file that defines the VSCode extensions needed for that project
     * [ ] a set of 
-* [x] A *portal* is an instance of the project, containing its own
+* [x] A *taskspace* is an instance of the project, containing its own
     * VSCode server settings
     * 
 
@@ -34,17 +34,17 @@ Key:
 
 ## IPC communication daemon
 
-* [ ] Receives messages from tools running in portals
+* [ ] Receives messages from tools running in taskspaces
 
-## Portal CLI tools
+## TaskSpace CLI tools
 
 * [ ] Tool to spawn a new process
 
 ## Setting up the project directory
 
-* [x] Install the VSCode server (do we need a copy in *each portal*)
+* [x] Install the VSCode server (do we need a copy in *each taskspace*)
 
-## Setting up a portal
+## Setting up a taskspace
 
 * [x] Clone the project
 * [x] 

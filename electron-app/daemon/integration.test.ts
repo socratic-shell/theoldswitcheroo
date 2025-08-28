@@ -46,16 +46,16 @@ describe('Integration Tests', () => {
       await waitForSocket(testSocketPath, 5000);
       await new Promise(resolve => setTimeout(resolve, 200));
 
-      // 3. Send new-portal command
-      const newPortalResult = await runCLICommand([
-        'new-portal',
-        '--name', 'Integration Test Portal',
+      // 3. Send new-taskspace command
+      const newTaskSpaceResult = await runCLICommand([
+        'new-taskspace',
+        '--name', 'Integration Test TaskSpace',
         '--description', 'Created during integration testing',
         '--cwd', '/tmp/test-project'
       ]);
 
-      expect(newPortalResult.exitCode).toBe(0);
-      expect(newPortalResult.stdout).toContain('Portal creation request sent');
+      expect(newTaskSpaceResult.exitCode).toBe(0);
+      expect(newTaskSpaceResult.stdout).toContain('TaskSpace creation request sent');
 
       // 4. Send status command
       const statusResult = await runCLICommand(['status']);
@@ -66,9 +66,9 @@ describe('Integration Tests', () => {
       // 5. Verify daemon received messages
       await new Promise(resolve => setTimeout(resolve, 300));
 
-      // Check new-portal message
-      expect(daemonStdout).toContain('"type":"new_portal_request"');
-      expect(daemonStdout).toContain('"name":"Integration Test Portal"');
+      // Check new-taskspace message
+      expect(daemonStdout).toContain('"type":"new_taskspace_request"');
+      expect(daemonStdout).toContain('"name":"Integration Test TaskSpace"');
       expect(daemonStdout).toContain('"description":"Created during integration testing"');
 
       // Check status message
@@ -102,7 +102,7 @@ describe('Integration Tests', () => {
     expect(fs.existsSync(testSocketPath)).toBe(false);
 
     const result = await runCLICommand([
-      'new-portal',
+      'new-taskspace',
       '--name', 'Should Fail'
     ]);
 

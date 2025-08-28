@@ -4,12 +4,12 @@ import * as net from 'net';
 import * as fs from 'fs';
 import * as readline from 'readline';
 
-interface PortalMessage {
+interface TaskSpaceMessage {
   type: string;
   [key: string]: any;
 }
 
-class PortalDaemon {
+class TaskSpaceDaemon {
   private server: net.Server;
   private clients = new Set<net.Socket>();
   private socketPath: string;
@@ -108,7 +108,7 @@ class PortalDaemon {
       }
 
       this.server.listen(this.socketPath, () => {
-        console.log(`Portal daemon listening on ${this.socketPath}`);
+        console.log(`TaskSpace daemon listening on ${this.socketPath}`);
         
         // Set socket permissions (owner only)
         fs.chmodSync(this.socketPath, 0o600);
@@ -143,10 +143,10 @@ function parseArgs(): { socketPath: string } {
 async function main(): Promise<void> {
   try {
     const { socketPath } = parseArgs();
-    const daemon = new PortalDaemon(socketPath);
+    const daemon = new TaskSpaceDaemon(socketPath);
     await daemon.start();
     
-    console.log('Portal daemon started successfully');
+    console.log('TaskSpace daemon started successfully');
   } catch (error) {
     console.error('Failed to start daemon:', error);
     process.exit(1);

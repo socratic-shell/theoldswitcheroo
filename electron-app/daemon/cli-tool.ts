@@ -8,19 +8,19 @@ import * as os from 'os';
 
 // Helper function to extract UUID from current working directory path
 function extractUuidFromPath(cwd: string): string | null {
-  // Look for UUID pattern in the path (e.g., /path/to/portals/uuid-here/clone)
+  // Look for UUID pattern in the path (e.g., /path/to/taskspaces/uuid-here/clone)
   const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
   const match = cwd.match(uuidRegex);
   return match ? match[0] : null;
 }
 
-interface PortalMessage {
+interface TaskSpaceMessage {
   type: string;
   timestamp: string;
   [key: string]: any;
 }
 
-class PortalCLI {
+class TaskSpaceCLI {
   private socketPath: string;
 
   constructor() {
@@ -29,7 +29,7 @@ class PortalCLI {
     this.socketPath = process.env.THEOLDSWITCHEROO_SOCKET || path.join(baseDir, 'daemon.sock');
   }
 
-  private async sendMessage(message: PortalMessage): Promise<void> {
+  private async sendMessage(message: TaskSpaceMessage): Promise<void> {
     return new Promise((resolve, reject) => {
       // Check if socket exists
       if (!fs.existsSync(this.socketPath)) {
@@ -71,9 +71,9 @@ class PortalCLI {
     });
   }
 
-  async newPortal(name: string, options: { description?: string; cwd?: string }): Promise<void> {
-    const message: PortalMessage = {
-      type: 'new_portal_request',
+  async newTaskSpace(name: string, options: { description?: string; cwd?: string }): Promise<void> {
+    const message: TaskSpaceMessage = {
+      type: 'new_taskspace_request',
       name,
       description: options.description || '',
       cwd: options.cwd || process.cwd(),
@@ -82,21 +82,21 @@ class PortalCLI {
 
     try {
       await this.sendMessage(message);
-      console.log(`✓ Portal creation request sent: "${name}"`);
+      console.log(`✓ TaskSpace creation request sent: "${name}"`);
     } catch (error) {
-      console.error(`✗ Failed to create portal: ${error instanceof Error ? error.message : error}`);
+      console.error(`✗ Failed to create taskspace: ${error instanceof Error ? error.message : error}`);
       process.exit(1);
     }
   }
 
-  async updatePortal(uuid: string, options: { description?: string; name?: string }): Promise<void> {
+  async updateTaskSpace(uuid: string, options: { description?: string; name?: string }): Promise<void> {
     if (!options.description && !options.name) {
       console.error('✗ Must specify --description or --name to update');
       process.exit(1);
     }
 
-    const message: PortalMessage = {
-      type: 'update_portal',
+    const message: TaskSpaceMessage = {
+      type: 'update_taskspace',
       uuid,
       timestamp: new Date().toISOString(),
       ...(options.description && { description: options.description }),
@@ -105,15 +105,15 @@ class PortalCLI {
 
     try {
       await this.sendMessage(message);
-      console.log(`✓ Portal update request sent for: ${uuid}`);
+      console.log(`✓ TaskSpace update request sent for: ${uuid}`);
     } catch (error) {
-      console.error(`✗ Failed to update portal: ${error instanceof Error ? error.message : error}`);
+      console.error(`✗ Failed to update taskspace: ${error instanceof Error ? error.message : error}`);
       process.exit(1);
     }
   }
 
   async status(): Promise<void> {
-    const message: PortalMessage = {
+    const message: TaskSpaceMessage = {
       type: 'status_request',
       timestamp: new Date().toISOString()
     };
@@ -130,29 +130,29 @@ class PortalCLI {
 
 async function main(): Promise<void> {
   const program = new Command();
-  const cli = new PortalCLI();
+  const cli = new TaskSpaceCLI();
 
   program
     .name('theoldswitcheroo')
-    .description('Manage VSCode portals from the command line')
+    .description('Manage VSCode taskspaces from the command line')
     .version('1.0.0');
 
   program
-    .command('new-portal')
-    .description('Create a new VSCode portal')
-    .requiredOption('-n, --name <name>', 'Portal name')
-    .option('-d, --description <description>', 'Portal description')
-    .option('-c, --cwd <directory>', 'Working directory for the portal', process.cwd())
+    .command('new-taskspace')
+    .description('Create a new VSCode taskspace')
+    .requiredOption('-n, --name <name>', 'TaskSpace name')
+    .option('-d, --description <description>', 'TaskSpace description')
+    .option('-c, --cwd <directory>', 'Working directory for the taskspace', process.cwd())
     .action(async (options) => {
-      await cli.newPortal(options.name, {
+      await cli.newTaskSpace(options.name, {
         description: options.description,
         cwd: options.cwd
       });
     });
 
   program
-    .command('update-portal')
-    .description('Update an existing portal (uses UUID from current directory)')
+    .command('update-taskspace')
+    .description('Update an existing taskspace (uses UUID from current directory)')
     .option('-d, --description <description>', 'New description')
     .option('-n, --name <name>', 'New name')
     .action(async (options) => {
@@ -161,12 +161,12 @@ async function main(): Promise<void> {
       const uuid = extractUuidFromPath(cwd);
       
       if (!uuid) {
-        console.error('✗ Could not determine portal UUID from current directory');
-        console.error('  Make sure you are running this command from within a portal directory');
+        console.error('✗ Could not determine taskspace UUID from current directory');
+        console.error('  Make sure you are running this command from within a taskspace directory');
         process.exit(1);
       }
       
-      await cli.updatePortal(uuid, {
+      await cli.updateTaskSpace(uuid, {
         description: options.description,
         name: options.name
       });
@@ -174,7 +174,7 @@ async function main(): Promise<void> {
 
   program
     .command('status')
-    .description('Get daemon and portal status')
+    .description('Get daemon and taskspace status')
     .action(async () => {
       await cli.status();
     });

@@ -8,24 +8,24 @@ import { SSHConnectionManager } from './ssh-manager.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-interface PortalMessage {
+interface TaskSpaceMessage {
   type: string;
   timestamp: string;
   [key: string]: any;
 }
 
-interface PortalRequest {
-  type: 'new_portal_request';
+interface TaskSpaceRequest {
+  type: 'new_taskspace_request';
   name: string;
   description?: string;
   cwd?: string;
   timestamp: string;
 }
 
-export class PortalCommunicationManager {
+export class TaskSpaceCommunicationManager {
   private sshManager: SSHConnectionManager;
   private daemonProcesses = new Map<string, ChildProcess>();
-  private messageHandlers = new Map<string, (message: PortalMessage) => void>();
+  private messageHandlers = new Map<string, (message: TaskSpaceMessage) => void>();
 
   constructor(sshManager: SSHConnectionManager) {
     this.sshManager = sshManager;
@@ -33,8 +33,8 @@ export class PortalCommunicationManager {
   }
 
   private setupMessageHandlers(): void {
-    this.messageHandlers.set('new_portal_request', this.handleNewPortalRequest.bind(this));
-    this.messageHandlers.set('update_portal', this.handleUpdatePortal.bind(this));
+    this.messageHandlers.set('new_taskspace_request', this.handleNewTaskSpaceRequest.bind(this));
+    this.messageHandlers.set('update_taskspace', this.handleUpdateTaskSpace.bind(this));
     this.messageHandlers.set('status_request', this.handleStatusRequest.bind(this));
   }
 
@@ -87,7 +87,7 @@ export class PortalCommunicationManager {
         const lines = data.toString().split('\n').filter(line => line.trim());
         for (const line of lines) {
           try {
-            const message = JSON.parse(line) as PortalMessage;
+            const message = JSON.parse(line) as TaskSpaceMessage;
             this.handleMessage(hostname, message);
           } catch (error) {
             // Not JSON, probably daemon log output
@@ -173,7 +173,7 @@ export class PortalCommunicationManager {
     }
   }
 
-  private handleMessage(hostname: string, message: PortalMessage): void {
+  private handleMessage(hostname: string, message: TaskSpaceMessage): void {
     console.log(`[${hostname}] Received message:`, message);
 
     const handler = this.messageHandlers.get(message.type);
@@ -184,14 +184,14 @@ export class PortalCommunicationManager {
     }
   }
 
-  private handleNewPortalRequest(message: PortalMessage): void {
-    const request = message as PortalRequest;
-    console.log(`Creating new portal: ${request.name}`);
+  private handleNewTaskSpaceRequest(message: TaskSpaceMessage): void {
+    const request = message as TaskSpaceRequest;
+    console.log(`Creating new taskspace: ${request.name}`);
 
     // Emit event for main app to handle
-    if (this.onPortalRequest) {
-      this.onPortalRequest({
-        type: 'new_portal',
+    if (this.onTaskSpaceRequest) {
+      this.onTaskSpaceRequest({
+        type: 'new_taskspace',
         name: request.name,
         description: request.description || '',
         cwd: request.cwd || process.cwd(),
@@ -200,13 +200,13 @@ export class PortalCommunicationManager {
     }
   }
 
-  private handleUpdatePortal(message: PortalMessage): void {
-    console.log('Updating portal:', message);
+  private handleUpdateTaskSpace(message: TaskSpaceMessage): void {
+    console.log('Updating taskspace:', message);
 
     // Emit event for main app to handle
-    if (this.onPortalRequest) {
-      this.onPortalRequest({
-        type: 'update_portal',
+    if (this.onTaskSpaceRequest) {
+      this.onTaskSpaceRequest({
+        type: 'update_taskspace',
         uuid: (message as any).uuid,
         description: (message as any).description,
         name: (message as any).name,
@@ -215,10 +215,10 @@ export class PortalCommunicationManager {
     }
   }
 
-  private handleStatusRequest(message: PortalMessage): void {
+  private handleStatusRequest(message: TaskSpaceMessage): void {
     console.log('Status request received');
 
-    // Send back current portal status via daemon
+    // Send back current taskspace status via daemon
     const hostname = this.getCurrentHostname(message);
     if (this.onStatusRequest) {
       const status = this.onStatusRequest(hostname);
@@ -230,7 +230,7 @@ export class PortalCommunicationManager {
     }
   }
 
-  private getCurrentHostname(message: PortalMessage): string {
+  private getCurrentHostname(message: TaskSpaceMessage): string {
     // Find which hostname this message came from
     for (const [hostname, process] of this.daemonProcesses) {
       // For now, return the first active hostname
@@ -241,8 +241,8 @@ export class PortalCommunicationManager {
   }
 
   // Event handlers for main app integration
-  private onPortalRequest?: (request: {
-    type: 'new_portal' | 'update_portal';
+  private onTaskSpaceRequest?: (request: {
+    type: 'new_taskspace' | 'update_taskspace';
     name?: string;
     description?: string;
     cwd?: string;
@@ -251,19 +251,19 @@ export class PortalCommunicationManager {
   }) => void;
 
   private onStatusRequest?: (hostname: string) => {
-    portals: Array<{ name: string; status: string; uuid: string }>;
-    activePortal?: string;
+    taskspaces: Array<{ name: string; status: string; uuid: string }>;
+    activeTaskSpace?: string;
   };
 
-  setPortalRequestHandler(handler: typeof this.onPortalRequest): void {
-    this.onPortalRequest = handler;
+  setTaskSpaceRequestHandler(handler: typeof this.onTaskSpaceRequest): void {
+    this.onTaskSpaceRequest = handler;
   }
 
   setStatusRequestHandler(handler: typeof this.onStatusRequest): void {
     this.onStatusRequest = handler;
   }
 
-  async sendMessage(hostname: string, message: PortalMessage): Promise<void> {
+  async sendMessage(hostname: string, message: TaskSpaceMessage): Promise<void> {
     const daemonProcess = this.daemonProcesses.get(hostname);
     if (!daemonProcess || !daemonProcess.stdin) {
       throw new Error(`No active daemon for ${hostname}`);

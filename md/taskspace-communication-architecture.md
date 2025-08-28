@@ -1,14 +1,14 @@
-# Portal Communication Architecture
+# TaskSpace Communication Architecture
 
-The VSCode multiplexer enables bidirectional communication between remote VSCode portals and the Electron app through a daemon-based architecture. This allows users to manage portals from within their development environment using command-line tools.
+The VSCode multiplexer enables bidirectional communication between remote VSCode taskspaces and the Electron app through a daemon-based architecture. This allows users to manage taskspaces from within their development environment using command-line tools.
 
 ## Architecture Overview
 
 The communication system consists of three components:
 
-1. **Electron App** - Manages portal lifecycle and UI
+1. **Electron App** - Manages taskspace lifecycle and UI
 2. **Remote Daemon** - Message router running on the remote host
-3. **CLI Tools** - Command-line interface for portal management
+3. **CLI Tools** - Command-line interface for taskspace management
 
 ```
 ┌─────────────────┐    SSH Connection    ┌─────────────────┐
@@ -20,7 +20,7 @@ The communication system consists of three components:
                                                │
                                          ┌─────▼───────────┐
                                          │   CLI Tools     │
-                                         │ & VSCode Portals│
+                                         │ & VSCode TaskSpaces│
                                          └─────────────────┘
 ```
 
@@ -30,7 +30,7 @@ The communication system consists of three components:
 
 The daemon follows the same lifecycle pattern as SSH master connections:
 
-1. **Startup**: Electron app starts daemon via SSH when first portal is created
+1. **Startup**: Electron app starts daemon via SSH when first taskspace is created
 2. **Persistence**: Daemon stays alive for entire Electron app duration
 3. **Cleanup**: Daemon terminates when Electron app shuts down
 
@@ -90,7 +90,7 @@ if (fs.existsSync(socketPath)) {
 The running instance monitors for socket deletion and shuts down gracefully:
 
 ```javascript
-class PortalCommunicationManager {
+class TaskSpaceCommunicationManager {
   startDaemon(hostname) {
     // ... start daemon ...
     
@@ -125,13 +125,13 @@ class PortalCommunicationManager {
 
 ### Message Flow
 
-**Portal → Electron:**
+**TaskSpace → Electron:**
 1. CLI tool connects to Unix socket
 2. Daemon receives message from socket
 3. Daemon forwards message to Electron via SSH stdout
 4. Electron processes message and updates state
 
-**Electron → Portal:**
+**Electron → TaskSpace:**
 1. Electron sends message via SSH stdin
 2. Daemon receives message from SSH stdin
 3. Daemon broadcasts to connected CLI tools via Unix socket
@@ -141,11 +141,11 @@ class PortalCommunicationManager {
 All messages use single-line JSON format with a `type` field for routing:
 
 ```json
-{"type":"new_portal_request","name":"API Server","description":"Main backend service","cwd":"/home/user/projects/api-server","timestamp":"2025-08-27T20:45:00Z"}
+{"type":"new_taskspace_request","name":"API Server","description":"Main backend service","cwd":"/home/user/projects/api-server","timestamp":"2025-08-27T20:45:00Z"}
 
-{"type":"update_portal","uuid":"abc123-def456-789","description":"Updated: Now includes authentication","timestamp":"2025-08-27T20:46:00Z"}
+{"type":"update_taskspace","uuid":"abc123-def456-789","description":"Updated: Now includes authentication","timestamp":"2025-08-27T20:46:00Z"}
 
-{"type":"portal_status","uuid":"abc123-def456-789","status":"ready","message":"Portal is ready for connections"}
+{"type":"taskspace_status","uuid":"abc123-def456-789","status":"ready","message":"TaskSpace is ready for connections"}
 ```
 
 Each message is terminated with a newline character (`\n`) for reliable parsing over stdin/stdout and Unix sockets.
@@ -159,7 +159,7 @@ The daemon is a Node.js process that acts as a message router:
 ```javascript
 const net = require('net');
 
-class PortalDaemon {
+class TaskSpaceDaemon {
   constructor(socketPath) {
     this.socketPath = socketPath;
     this.clients = new Set();
@@ -220,9 +220,9 @@ function sendMessage(message) {
   client.end();
 }
 
-// Usage: theoldswitcheroo new-portal --name "API Server"
+// Usage: theoldswitcheroo new-taskspace --name "API Server"
 sendMessage({
-  type: 'new_portal_request',
+  type: 'new_taskspace_request',
   name: process.argv[3],
   description: process.argv[5] || '',
   cwd: process.cwd(),
@@ -235,7 +235,7 @@ sendMessage({
 The Electron app manages daemon lifecycle and processes messages:
 
 ```javascript
-class PortalCommunicationManager {
+class TaskSpaceCommunicationManager {
   constructor(sshManager) {
     this.sshManager = sshManager;
     this.sessionUuid = generateUUID();
@@ -264,11 +264,11 @@ class PortalCommunicationManager {
   
   handleMessage(message) {
     switch (message.type) {
-      case 'new_portal_request':
-        this.createNewPortal(message);
+      case 'new_taskspace_request':
+        this.createNewTaskSpace(message);
         break;
-      case 'update_portal':
-        this.updatePortal(message);
+      case 'update_taskspace':
+        this.updateTaskSpace(message);
         break;
     }
   }
@@ -318,13 +318,13 @@ if [ ! -S "$SOCKET_PATH" ]; then
 fi
 
 # CLI tools can then connect
-theoldswitcheroo new-portal --name "My Project"
+theoldswitcheroo new-taskspace --name "My Project"
 ```
 
 ## Security Considerations
 
 - **Unix Socket Permissions**: Socket files created with 600 permissions (owner only)
-- **Process Isolation**: Daemon runs under the same user as VSCode portals
+- **Process Isolation**: Daemon runs under the same user as VSCode taskspaces
 - **Message Validation**: All JSON messages validated before processing
 - **Resource Cleanup**: Sockets and processes cleaned up on shutdown
 
@@ -349,24 +349,24 @@ theoldswitcheroo new-portal --name "My Project"
 The same message protocol can be used by MCP servers:
 
 ```javascript
-// MCP server can send portal management messages
+// MCP server can send taskspace management messages
 const message = {
-  type: 'new_portal_request',
+  type: 'new_taskspace_request',
   name: 'Generated Project',
   description: 'AI-created development environment',
   cwd: '/tmp/ai-project-123'
 };
 
-sendToPortalDaemon(message);
+sendToTaskSpaceDaemon(message);
 ```
 
-### Advanced Portal Operations
+### Advanced TaskSpace Operations
 
 Additional message types can be added:
 
-- `clone_repository` - Clone a git repository into a new portal
-- `install_extensions` - Install VSCode extensions in a portal
-- `execute_command` - Run commands within a portal's context
-- `share_portal` - Enable collaborative access to a portal
+- `clone_repository` - Clone a git repository into a new taskspace
+- `install_extensions` - Install VSCode extensions in a taskspace
+- `execute_command` - Run commands within a taskspace's context
+- `share_taskspace` - Enable collaborative access to a taskspace
 
-The daemon architecture provides a flexible foundation for extending portal management capabilities.
+The daemon architecture provides a flexible foundation for extending taskspace management capabilities.

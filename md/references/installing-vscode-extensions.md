@@ -1,6 +1,6 @@
-# OpenVSCode Server extension management for multiplexer portals
+# OpenVSCode Server extension management for multiplexer taskspaces
 
-OpenVSCode Server provides robust extension management capabilities through command-line flags, but implementing this for isolated multiplexer portals requires careful attention to directory isolation and a specific installation workflow. The `--install-extension` flag is the correct method you guessed, and it works with marketplace IDs, local .vsix files, and remote URLs. Extensions can be pre-installed during Docker builds using workarounds or installed at runtime, with each portal requiring separate extension and data directories for complete isolation.
+OpenVSCode Server provides robust extension management capabilities through command-line flags, but implementing this for isolated multiplexer taskspaces requires careful attention to directory isolation and a specific installation workflow. The `--install-extension` flag is the correct method you guessed, and it works with marketplace IDs, local .vsix files, and remote URLs. Extensions can be pre-installed during Docker builds using workarounds or installed at runtime, with each taskspace requiring separate extension and data directories for complete isolation.
 
 ## Extension installation command-line interface
 
@@ -37,14 +37,14 @@ ENTRYPOINT ["/bin/sh", "-c", "exec ${OPENVSCODE} --host 0.0.0.0 --port 3000 \
   --start-server"]
 ```
 
-## Isolated portal configuration architecture
+## Isolated taskspace configuration architecture
 
-Each multiplexer portal requires complete isolation through separate data and extension directories. OpenVSCode Server provides two critical flags for this purpose: `--user-data-dir` for settings and user data, and `--extensions-dir` for extension storage. Note that OpenVSCode Server automatically appends `/data` to the user-data-dir path, which affects how you structure your directories.
+Each multiplexer taskspace requires complete isolation through separate data and extension directories. OpenVSCode Server provides two critical flags for this purpose: `--user-data-dir` for settings and user data, and `--extensions-dir` for extension storage. Note that OpenVSCode Server automatically appends `/data` to the user-data-dir path, which affects how you structure your directories.
 
-The recommended directory structure for multiple isolated portals follows this pattern:
+The recommended directory structure for multiple isolated taskspaces follows this pattern:
 ```
-/opt/portals/
-├── portal-rust/
+/opt/taskspaces/
+├── taskspace-rust/
 │   ├── data/
 │   │   ├── Machine/
 │   │   │   └── settings.json
@@ -53,7 +53,7 @@ The recommended directory structure for multiple isolated portals follows this p
 │   │       └── keybindings.json
 │   └── extensions/
 │       └── (rust-specific extensions)
-├── portal-typescript/
+├── taskspace-typescript/
 │   ├── data/
 │   │   └── (typescript configuration)
 │   └── extensions/
@@ -63,26 +63,26 @@ The recommended directory structure for multiple isolated portals follows this p
         └── (custom .vsix files)
 ```
 
-To launch isolated portal instances with pre-configured settings:
+To launch isolated taskspace instances with pre-configured settings:
 ```bash
-# Rust development portal
+# Rust development taskspace
 openvscode-server \
   --host 0.0.0.0 \
   --port 8080 \
-  --user-data-dir /opt/portals/portal-rust \
-  --extensions-dir /opt/portals/portal-rust/extensions \
+  --user-data-dir /opt/taskspaces/taskspace-rust \
+  --extensions-dir /opt/taskspaces/taskspace-rust/extensions \
   --without-connection-token
 
-# TypeScript portal on different port
+# TypeScript taskspace on different port
 openvscode-server \
   --host 0.0.0.0 \
   --port 8081 \
-  --user-data-dir /opt/portals/portal-typescript \
-  --extensions-dir /opt/portals/portal-typescript/extensions \
+  --user-data-dir /opt/taskspaces/taskspace-typescript \
+  --extensions-dir /opt/taskspaces/taskspace-typescript/extensions \
   --without-connection-token
 ```
 
-Settings and keybindings can be pre-configured by placing JSON files in the appropriate directories before server startup. The Machine settings apply globally while User settings can be customized per portal. OpenVSCode Server does not support VSCode's built-in settings sync for multi-instance scenarios, so you'll need to manage configuration distribution yourself.
+Settings and keybindings can be pre-configured by placing JSON files in the appropriate directories before server startup. The Machine settings apply globally while User settings can be customized per taskspace. OpenVSCode Server does not support VSCode's built-in settings sync for multi-instance scenarios, so you'll need to manage configuration distribution yourself.
 
 ## Custom extension deployment workflow
 
@@ -105,16 +105,16 @@ docker cp theoldswitcheroo-1.0.0.vsix container_id:/tmp/
 
 Install the extension either at server startup or to a running instance:
 ```bash
-# Install to specific portal
+# Install to specific taskspace
 openvscode-server \
-  --extensions-dir /opt/portals/portal-rust/extensions \
+  --extensions-dir /opt/taskspaces/taskspace-rust/extensions \
   --install-extension /tmp/theoldswitcheroo-1.0.0.vsix
 
 # Or include in startup command
 openvscode-server \
   --host 0.0.0.0 --port 8080 \
-  --user-data-dir /opt/portals/portal-rust \
-  --extensions-dir /opt/portals/portal-rust/extensions \
+  --user-data-dir /opt/taskspaces/taskspace-rust \
+  --extensions-dir /opt/taskspaces/taskspace-rust/extensions \
   --install-extension /tmp/theoldswitcheroo-1.0.0.vsix \
   --start-server
 ```
@@ -123,15 +123,15 @@ Custom extensions installed this way **do persist across server restarts** as th
 
 ## Production deployment patterns
 
-For production multiplexer deployments, implement a portal initialization script that ensures consistent setup:
+For production multiplexer deployments, implement a taskspace initialization script that ensures consistent setup:
 ```bash
 #!/bin/bash
-# init-portal.sh
+# init-taskspace.sh
 PORTAL_NAME=$1
 PORTAL_PORT=$2
 EXTENSIONS=$3  # comma-separated list
 
-BASE_DIR="/opt/portals/${PORTAL_NAME}"
+BASE_DIR="/opt/taskspaces/${PORTAL_NAME}"
 
 # Create isolated directory structure
 mkdir -p "${BASE_DIR}/data/Machine"
@@ -155,7 +155,7 @@ for ext in "${EXT_ARRAY[@]}"; do
     fi
 done
 
-# Start portal with extensions
+# Start taskspace with extensions
 exec openvscode-server \
     --host 0.0.0.0 \
     --port ${PORTAL_PORT} \
@@ -166,10 +166,10 @@ exec openvscode-server \
     --start-server
 ```
 
-Use this script to launch portals with different configurations:
+Use this script to launch taskspaces with different configurations:
 ```bash
-./init-portal.sh rust-dev 8080 "rust-lang.rust-analyzer,vadimcn.vscode-lldb,theoldswitcheroo.vsix"
-./init-portal.sh typescript-dev 8081 "ms-vscode.vscode-typescript-next,dbaeumer.vscode-eslint"
+./init-taskspace.sh rust-dev 8080 "rust-lang.rust-analyzer,vadimcn.vscode-lldb,theoldswitcheroo.vsix"
+./init-taskspace.sh typescript-dev 8081 "ms-vscode.vscode-typescript-next,dbaeumer.vscode-eslint"
 ```
 
 ## Working with Open VSX registry limitations
@@ -197,6 +197,6 @@ export VSCODE_GALLERY_SERVICE_URL="https://open-vsx.org/vscode/gallery"
 export VSCODE_GALLERY_ITEM_URL="https://open-vsx.org/vscode/item"
 ```
 
-For complete isolation between portals, combine these patterns with container orchestration or systemd services. Each portal should have its own system user, port allocation, and resource limits to ensure true multi-tenancy.
+For complete isolation between taskspaces, combine these patterns with container orchestration or systemd services. Each taskspace should have its own system user, port allocation, and resource limits to ensure true multi-tenancy.
 
-The key to successful extension management in your multiplexer application is maintaining strict separation between portal instances through dedicated directories, pre-configuring extensions during portal initialization, and using the runtime installation approach for Docker deployments to work around the build-time limitation. Custom extensions work seamlessly alongside marketplace extensions when properly deployed to each portal's isolated extension directory.
+The key to successful extension management in your multiplexer application is maintaining strict separation between taskspace instances through dedicated directories, pre-configuring extensions during taskspace initialization, and using the runtime installation approach for Docker deployments to work around the build-time limitation. Custom extensions work seamlessly alongside marketplace extensions when properly deployed to each taskspace's isolated extension directory.

@@ -4,7 +4,7 @@ import * as fs from 'fs';
 
 // Common constants
 export const LOCAL_DATA_DIR = path.join(os.homedir(), '.socratic-shell', 'theoldswitcheroo');
-export const PORTALS_FILE = path.join(LOCAL_DATA_DIR, 'portals.json');
+export const TASKSPACES_FILE = path.join(LOCAL_DATA_DIR, 'taskspaces.json');
 export const SETTINGS_FILE = path.join(LOCAL_DATA_DIR, 'settings.json');
 export const BASE_DIR = "~/.socratic-shell/theoldswitcheroo";
 

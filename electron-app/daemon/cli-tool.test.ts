@@ -3,7 +3,7 @@ import * as net from 'net';
 import * as fs from 'fs';
 import * as path from 'path';
 
-describe('Portal CLI Tool', () => {
+describe('TaskSpace CLI Tool', () => {
   let daemonProcess: ChildProcess;
   const testSocketPath = '/tmp/test-cli-daemon.sock';
   const bundledDaemonPath = path.join(__dirname, '..', 'dist', 'daemon-bundled.cjs');
@@ -49,7 +49,7 @@ describe('Portal CLI Tool', () => {
     }
   });
 
-  test('CLI tool sends new-portal message', async () => {
+  test('CLI tool sends new-taskspace message', async () => {
     // Capture daemon stdout
     let stdoutData = '';
     daemonProcess.stdout?.on('data', (data) => {
@@ -59,9 +59,9 @@ describe('Portal CLI Tool', () => {
     // Run CLI tool
     const cliProcess = spawn('node', [
       bundledCliPath,
-      'new-portal',
-      '--name', 'Test Portal',
-      '--description', 'A test portal'
+      'new-taskspace',
+      '--name', 'Test TaskSpace',
+      '--description', 'A test taskspace'
     ], {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, THEOLDSWITCHEROO_SOCKET: testSocketPath }
@@ -90,15 +90,15 @@ describe('Portal CLI Tool', () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(cliStdout).toContain('Portal creation request sent');
+    expect(cliStdout).toContain('TaskSpace creation request sent');
     
     // Give daemon time to process message
     await new Promise(resolve => setTimeout(resolve, 200));
     
     // Check that message was forwarded to daemon stdout
-    expect(stdoutData).toContain('"type":"new_portal_request"');
-    expect(stdoutData).toContain('"name":"Test Portal"');
-    expect(stdoutData).toContain('"description":"A test portal"');
+    expect(stdoutData).toContain('"type":"new_taskspace_request"');
+    expect(stdoutData).toContain('"name":"Test TaskSpace"');
+    expect(stdoutData).toContain('"description":"A test taskspace"');
   });
 
   test('CLI tool shows error when daemon not running', async () => {
@@ -109,8 +109,8 @@ describe('Portal CLI Tool', () => {
     // Run CLI tool
     const cliProcess = spawn('node', [
       bundledCliPath,
-      'new-portal',
-      '--name', 'Test Portal'
+      'new-taskspace',
+      '--name', 'Test TaskSpace'
     ], {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, THEOLDSWITCHEROO_SOCKET: testSocketPath }

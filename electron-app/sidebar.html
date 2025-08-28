@@ -72,7 +72,7 @@
       z-index: 500;
     }
 
-    .portals-container {
+    .taskspaces-container {
       flex: 1;
       padding: 30px 10px 10px 10px;
       /* Top padding for traffic light buttons */
@@ -81,10 +81,10 @@
       display: flex;
       flex-direction: column;
       gap: 8px;
-      -webkit-app-region: no-drag; /* Allow interaction with portal boxes */
+      -webkit-app-region: no-drag; /* Allow interaction with taskspace boxes */
     }
 
-    .portal-box {
+    .taskspace-box {
       width: calc(100% - 20px); /* Account for container padding */
       min-height: 60px;
       background: #007acc;
@@ -101,11 +101,11 @@
       overflow-wrap: break-word;
     }
 
-    .portal-box.active {
+    .taskspace-box.active {
       background: #40a6ff;
     }
 
-    .portal-name {
+    .taskspace-name {
       font-weight: bold;
       font-size: 14px;
       line-height: 1.2;
@@ -114,20 +114,20 @@
       hyphens: auto;
     }
 
-    .portal-bullets {
+    .taskspace-bullets {
       font-size: 11px;
       opacity: 0.9;
       line-height: 1.3;
     }
 
-    .portal-bullet {
+    .taskspace-bullet {
       display: block;
       margin-bottom: 2px;
       word-wrap: break-word;
       overflow-wrap: break-word;
     }
 
-    .portal-bullet:before {
+    .taskspace-bullet:before {
       content: "• ";
       margin-right: 4px;
     }
@@ -170,15 +170,15 @@
     }
 
     /* Custom scrollbar */
-    .portals-container::-webkit-scrollbar {
+    .taskspaces-container::-webkit-scrollbar {
       width: 6px;
     }
 
-    .portals-container::-webkit-scrollbar-track {
+    .taskspaces-container::-webkit-scrollbar-track {
       background: transparent;
     }
 
-    .portals-container::-webkit-scrollbar-thumb {
+    .taskspaces-container::-webkit-scrollbar-thumb {
       background: #464647;
       border-radius: 3px;
     }
@@ -244,7 +244,7 @@
       gap: 8px;
     }
 
-    .collapsed-portal {
+    .collapsed-taskspace {
       width: 12px;
       height: 12px;
       background: #007acc;
@@ -252,7 +252,7 @@
       cursor: pointer;
     }
 
-    .collapsed-portal.active {
+    .collapsed-taskspace.active {
       background: #40a6ff;
     }
   </style>
@@ -263,13 +263,13 @@
     <div class="window-drag-area"></div>
     <div class="resize-handle" id="resize-handle"></div>
     
-    <div class="portals-container" id="portals-container">
-      <!-- portals will be populated dynamically -->
+    <div class="taskspaces-container" id="taskspaces-container">
+      <!-- taskspaces will be populated dynamically -->
     </div>
 
     <div class="bottom-toolbar">
       <button class="toolbar-button" id="settings-button">⚙ Settings</button>
-      <button class="toolbar-button add-button" id="add-button">+ New Portal</button>
+      <button class="toolbar-button add-button" id="add-button">+ New TaskSpace</button>
     </div>
   </div>
 
@@ -279,12 +279,12 @@
     const { ipcRenderer } = require('electron');
 
     let isCollapsed = false;
-    let currentPortalData = [];
+    let currentTaskSpaceData = [];
 
-    // Handle portal updates from main process
-    ipcRenderer.on('update-portals', (event, data) => {
-      currentPortalData = data.portalData;
-      updatePortalsUI(data.portalData, data.activePortalUuid);
+    // Handle taskspace updates from main process
+    ipcRenderer.on('update-taskspaces', (event, data) => {
+      currentTaskSpaceData = data.taskspaceData;
+      updateTaskSpacesUI(data.taskspaceData, data.activeTaskSpaceUuid);
     });
 
     // Blue bar resize and collapse functionality
@@ -346,7 +346,7 @@
         sidebarContent.style.display = 'none';
         draggableBar.classList.add('collapsed');
         ipcRenderer.invoke('resize-sidebar', 20);
-        showCollapsedPortals();
+        showCollapsedTaskSpaces();
       } else {
         sidebarContent.style.display = 'flex';
         draggableBar.classList.remove('collapsed');
@@ -354,18 +354,18 @@
       }
     }
 
-    function showCollapsedPortals() {
+    function showCollapsedTaskSpaces() {
       // Create collapsed view
       const collapsedSidebar = document.createElement('div');
       collapsedSidebar.className = 'collapsed-sidebar';
       collapsedSidebar.id = 'collapsed-sidebar';
       
-      currentPortalData.forEach(portalDatum => {
-        const collapsedPortal = document.createElement('div');
-        collapsedPortal.className = `collapsed-portal ${portalDatum.active ? 'active' : ''}`;
-        collapsedPortal.title = portalDatum.name;
-        collapsedPortal.addEventListener('click', () => switchToPortal(portalDatum.uuid));
-        collapsedSidebar.appendChild(collapsedPortal);
+      currentTaskSpaceData.forEach(taskspaceDatum => {
+        const collapsedTaskSpace = document.createElement('div');
+        collapsedTaskSpace.className = `collapsed-taskspace ${taskspaceDatum.active ? 'active' : ''}`;
+        collapsedTaskSpace.title = taskspaceDatum.name;
+        collapsedTaskSpace.addEventListener('click', () => switchToTaskSpace(taskspaceDatum.uuid));
+        collapsedSidebar.appendChild(collapsedTaskSpace);
       });
       
       // Insert before the draggable bar
@@ -406,70 +406,70 @@
       document.removeEventListener('mouseup', stopResize);
     }
 
-    // Update the portals UI
-    function updatePortalsUI(portalData, activePortalUuid) {
+    // Update the taskspaces UI
+    function updateTaskSpacesUI(taskspaceData, activeTaskSpaceUuid) {
       if (isCollapsed) {
         // Remove old collapsed sidebar if it exists
         const oldCollapsed = document.getElementById('collapsed-sidebar');
         if (oldCollapsed) {
           oldCollapsed.remove();
         }
-        showCollapsedPortals();
+        showCollapsedTaskSpaces();
         return;
       }
 
-      const container = document.getElementById('portals-container');
+      const container = document.getElementById('taskspaces-container');
       container.innerHTML = '';
 
-      portalData.forEach(portalDatum => {
-        const portalBox = document.createElement('div');
-        portalBox.className = `portal-box ${portalDatum.active ? 'active' : ''}`;
-        portalBox.dataset.portalUuid = portalDatum.uuid;
+      taskspaceData.forEach(taskspaceDatum => {
+        const taskspaceBox = document.createElement('div');
+        taskspaceBox.className = `taskspace-box ${taskspaceDatum.active ? 'active' : ''}`;
+        taskspaceBox.dataset.taskspaceUuid = taskspaceDatum.uuid;
 
-        // Create portal name element
+        // Create taskspace name element
         const nameElement = document.createElement('div');
-        nameElement.className = 'portal-name';
-        nameElement.textContent = portalDatum.name;
+        nameElement.className = 'taskspace-name';
+        nameElement.textContent = taskspaceDatum.name;
 
         // Create bullets container
         const bulletsElement = document.createElement('div');
-        bulletsElement.className = 'portal-bullets';
+        bulletsElement.className = 'taskspace-bullets';
         
         // Add some sample bullets (will be replaced with real data later)
         const bullets = [
           'VSCode server running',
           'Extensions loaded',
-          `Port ${portalDatum.port || 'pending'}`
+          `Port ${taskspaceDatum.port || 'pending'}`
         ];
         
         bullets.forEach(bullet => {
           const bulletElement = document.createElement('span');
-          bulletElement.className = 'portal-bullet';
+          bulletElement.className = 'taskspace-bullet';
           bulletElement.textContent = bullet;
           bulletsElement.appendChild(bulletElement);
         });
 
-        portalBox.appendChild(nameElement);
-        portalBox.appendChild(bulletsElement);
+        taskspaceBox.appendChild(nameElement);
+        taskspaceBox.appendChild(bulletsElement);
 
-        // Add click handler for portal switching
-        portalBox.addEventListener('click', () => switchToPortal(portalDatum.uuid));
+        // Add click handler for taskspace switching
+        taskspaceBox.addEventListener('click', () => switchToTaskSpace(taskspaceDatum.uuid));
 
         // Add right-click handler for meta-view
-        portalBox.addEventListener('contextmenu', (e) => {
+        taskspaceBox.addEventListener('contextmenu', (e) => {
           e.preventDefault();
-          toggleView(portalDatum.uuid);
-          switchToPortal(portalDatum.uuid);
+          toggleView(taskspaceDatum.uuid);
+          switchToTaskSpace(taskspaceDatum.uuid);
         });
 
-        container.appendChild(portalBox);
+        container.appendChild(taskspaceBox);
       });
     }
 
-    // Toggle between regular and meta view for portal
-    async function toggleView(portalUuid) {
+    // Toggle between regular and meta view for taskspace
+    async function toggleView(taskspaceUuid) {
       try {
-        const result = await ipcRenderer.invoke('toggle-view', portalUuid);
+        const result = await ipcRenderer.invoke('toggle-view', taskspaceUuid);
         if (!result.success) {
           alert(`Failed to toggle view: ${result.error}`);
         }
@@ -488,14 +488,14 @@
       addButton.textContent = '⏳ Creating...';
 
       try {
-        const result = await ipcRenderer.invoke('create-portal');
+        const result = await ipcRenderer.invoke('create-taskspace');
         console.log('IPC result:', result);
 
         if (result.success) {
-          console.log(`Added portal with uuid=${result.uuid} and name=${result.name}`);
+          console.log(`Added taskspace with uuid=${result.uuid} and name=${result.name}`);
         } else {
-          console.error('portal creation failed:', result.error);
-          alert(`Failed to create portal: ${result.error}`);
+          console.error('taskspace creation failed:', result.error);
+          alert(`Failed to create taskspace: ${result.error}`);
         }
       } catch (error) {
         console.error('IPC error:', error);
@@ -503,38 +503,38 @@
       } finally {
         // Re-enable button
         addButton.disabled = false;
-        addButton.textContent = '+ New Portal';
+        addButton.textContent = '+ New TaskSpace';
       }
     }); 
 
-    // Function to switch portals
-    async function switchToPortal(portalUuid) {
-      console.log(`Switching to portal ${portalUuid}`);
+    // Function to switch taskspaces
+    async function switchToTaskSpace(taskspaceUuid) {
+      console.log(`Switching to taskspace ${taskspaceUuid}`);
 
       try {
-        const result = await ipcRenderer.invoke('switch-portal', portalUuid);
+        const result = await ipcRenderer.invoke('switch-taskspace', taskspaceUuid);
 
         if (result.success) {
-          // Update UI to show active portal
-          document.querySelectorAll('.portal-box').forEach(box => {
+          // Update UI to show active taskspace
+          document.querySelectorAll('.taskspace-box').forEach(box => {
             box.classList.remove('active');
           });
-          document.querySelectorAll('.collapsed-portal').forEach(box => {
+          document.querySelectorAll('.collapsed-taskspace').forEach(box => {
             box.classList.remove('active');
           });
 
-          const activeBox = document.querySelector(`[data-portal-uuid="${portalUuid}"]`);
+          const activeBox = document.querySelector(`[data-taskspace-uuid="${taskspaceUuid}"]`);
           if (activeBox) {
             activeBox.classList.add('active');
           }
 
-          console.log(`Switched to portal ${portalUuid}`);
+          console.log(`Switched to taskspace ${taskspaceUuid}`);
         } else {
-          console.error('portal switch failed:', result.error);
-          alert(`Failed to switch portal: ${result.error}`);
+          console.error('taskspace switch failed:', result.error);
+          alert(`Failed to switch taskspace: ${result.error}`);
         }
       } catch (error) {
-        console.error('portal switch error:', error);
+        console.error('taskspace switch error:', error);
         alert(`Error: ${error.message}`);
       }
     }
