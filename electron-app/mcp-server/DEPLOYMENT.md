@@ -1,6 +1,32 @@
 # TaskSpace MCP Server - Deployment
 
-## Standalone Executables
+## Automated Installation
+
+The easiest way to deploy the MCP server to a remote host:
+
+```bash
+npm run install-mcp-server <host> <path>
+```
+
+**Examples:**
+```bash
+npm run install-mcp-server myserver.com /usr/local/bin/theoldswitcheroo-mcp
+npm run install-mcp-server user@host.com ~/bin/theoldswitcheroo-mcp
+```
+
+This will:
+1. Bundle the MCP server into a standalone executable
+2. Copy it to the specified path on the remote host via scp
+3. Make it executable on the remote host
+4. Show MCP client configuration example
+
+**Requirements:**
+- SSH access to the target host
+- `scp` and `ssh` commands available locally
+
+## Manual Installation
+
+### Standalone Executables
 
 The MCP server is available as standalone executables that include Node.js runtime, making them completely location-independent.
 

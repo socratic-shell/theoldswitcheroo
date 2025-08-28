@@ -10,7 +10,8 @@
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "test": "jest",
-    "package": "npm run bundle && pkg dist/bundle.cjs --targets node18-macos-x64,node18-linux-x64,node18-win-x64 --out-path ./bin"
+    "package": "npm run bundle && pkg dist/bundle.cjs --targets node18-macos-x64,node18-linux-x64,node18-win-x64 --out-path ./bin",
+    "install-mcp-server": "tsx scripts/install-mcp-server.ts"
   },
   "bin": {
     "theoldswitcheroo-mcp": "./dist/index.js"
