@@ -299,11 +299,20 @@ export class PortalCommunicationManager {
     // Upload daemon to base directory
     await this.sshManager.uploadFile(hostname, daemonSource, `${baseDir}/daemon-bundled.js`);
 
-    // Upload CLI tool to bin directory (without .cjs extension for cleaner usage)
-    await this.sshManager.uploadFile(hostname, cliSource, `${binDir}/theoldswitcheroo`);
-
+    // Upload CLI tool to bin directory (with .cjs extension)
+    await this.sshManager.uploadFile(hostname, cliSource, `${binDir}/theoldswitcheroo-bundled.cjs`);
+    
+    // Create wrapper script that uses our Node.js
+    const wrapperScript = `#!/bin/bash
+exec "${baseDir}/nodejs/bin/node" "${binDir}/theoldswitcheroo-bundled.cjs" "$@"
+`;
+    
+    // Write wrapper script
+    await this.sshManager.executeCommand(hostname, `cat > ${binDir}/theoldswitcheroo << 'EOF'
+${wrapperScript}EOF`);
+    
     // Make files executable
-    await this.sshManager.executeCommand(hostname, `chmod +x ${baseDir}/daemon-bundled.js ${binDir}/theoldswitcheroo`);
+    await this.sshManager.executeCommand(hostname, `chmod +x ${baseDir}/daemon-bundled.js ${binDir}/theoldswitcheroo-bundled.cjs ${binDir}/theoldswitcheroo`);
 
     console.log(`Deployed daemon files to ${hostname}`);
     console.log(`CLI tool available at: ${binDir}/theoldswitcheroo`);
