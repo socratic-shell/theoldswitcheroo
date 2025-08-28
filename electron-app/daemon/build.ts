@@ -15,7 +15,7 @@ async function build() {
   console.log('Building daemon and CLI tools...');
 
   try {
-    // Bundle daemon (ESM)
+    // Bundle daemon (CommonJS for simpler Node.js execution)
     await esbuild.build({
       entryPoints: ['daemon.ts'],
       bundle: true,
@@ -23,7 +23,7 @@ async function build() {
       target: 'node18',
       outfile: '../dist/daemon-bundled.js',
       external: [], // Bundle all dependencies
-      format: 'esm'
+      format: 'cjs'
     });
     
     // Add shebang to daemon

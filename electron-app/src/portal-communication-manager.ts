@@ -72,7 +72,7 @@ export class PortalCommunicationManager {
       }
 
       // Start daemon via SSH
-      const daemonCommand = `cd ${baseDir} && ./nodejs/bin/node --input-type=module daemon-bundled.js --socket-path ${socketPath}`;
+      const daemonCommand = `cd ${baseDir} && ./nodejs/bin/node daemon-bundled.js --socket-path ${socketPath}`;
       const daemonProcess = spawn('ssh', [
         '-o', 'ControlMaster=no',
         '-o', 'ControlPath=none',
