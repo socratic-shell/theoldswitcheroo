@@ -8,6 +8,7 @@ import { randomUUID } from 'crypto';
 import { fileURLToPath } from 'url';
 import { LOCAL_DATA_DIR, PORTALS_FILE, SETTINGS_FILE, BASE_DIR, loadSettings, saveSettings, Settings } from './settings.js';
 import { sshManager } from './ssh-manager.js';
+import { PortalCommunicationManager } from './portal-communication-manager.js';
 
 // ES6 module equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -139,6 +140,13 @@ if (cleanIndex !== -1 && cleanIndex + 1 < args.length) {
       main().catch(console.error);
     }
   });
+
+  // Add cleanup for daemon processes
+  app.on('before-quit', async () => {
+    console.log('App quitting, cleaning up daemon processes...');
+    // Note: We can't easily access the SwitcherooApp instance here
+    // The cleanup will happen when the SSH connections close
+  });
 } else {
   console.error('This script must be run with Electron or with --clean flag');
   process.exit(1);
@@ -154,6 +162,7 @@ class SwitcherooApp {
   sidebarView!: WebContentsView;
   mainView: WebContentsView | null = null;
   sidebarWidth: number = 250; // Track sidebar width
+  portalManager: PortalCommunicationManager; // Add portal communication manager
 
   constructor(hostname: string) {
     // Global session management
@@ -161,6 +170,9 @@ class SwitcherooApp {
     this.activePortalUuid = null;
     this.hostname = hostname;
     this.loadingView = new LoadingView();
+
+    // Initialize portal communication manager
+    this.portalManager = new PortalCommunicationManager(sshManager);
 
     // Create a persistent session for this hostname (shared across all sessions)
     // and initialize it for vscode compatibility.
@@ -213,6 +225,12 @@ class SwitcherooApp {
       this.sidebarView.webContents.toggleDevTools();
       return { success: true };
     });
+
+    // Add daemon management handlers
+    ipcMain.handle('setup-host', async (_event, hostname) => await this.handleSetupHost(hostname));
+    ipcMain.handle('start-daemon', async (_event, hostname) => await this.handleStartDaemon(hostname));
+    ipcMain.handle('stop-daemon', async (_event, hostname) => await this.handleStopDaemon(hostname));
+    ipcMain.handle('get-daemon-status', (_event, hostname) => this.portalManager.isRunning(hostname));
   }
 
   async bootUp() {
@@ -384,6 +402,36 @@ class SwitcherooApp {
     this.sidebarWidth = Math.max(250, Math.min(500, newWidth));
     this.updateViewBounds();
     return { success: true };
+  }
+
+  /// Handles daemon setup for a host
+  async handleSetupHost(hostname: string) {
+    try {
+      await this.portalManager.deployDaemonFiles(hostname);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  /// Handles daemon start for a host
+  async handleStartDaemon(hostname: string) {
+    try {
+      await this.portalManager.startDaemon(hostname);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  /// Handles daemon stop for a host
+  async handleStopDaemon(hostname: string) {
+    try {
+      await this.portalManager.stopDaemon(hostname);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
   }
 
   /// Handles a toggle view message from the sidebar

@@ -1,0 +1,227 @@
+import { ChildProcess, spawn } from 'child_process';
+import * as fs from 'fs';
+import * as path from 'path';
+import { SSHConnectionManager } from './ssh-manager.js';
+
+interface PortalMessage {
+  type: string;
+  timestamp: string;
+  [key: string]: any;
+}
+
+interface PortalRequest {
+  type: 'new_portal_request';
+  name: string;
+  description?: string;
+  cwd?: string;
+  timestamp: string;
+}
+
+export class PortalCommunicationManager {
+  private sshManager: SSHConnectionManager;
+  private daemonProcesses = new Map<string, ChildProcess>();
+  private messageHandlers = new Map<string, (message: PortalMessage) => void>();
+
+  constructor(sshManager: SSHConnectionManager) {
+    this.sshManager = sshManager;
+    this.setupMessageHandlers();
+  }
+
+  private setupMessageHandlers(): void {
+    this.messageHandlers.set('new_portal_request', this.handleNewPortalRequest.bind(this));
+    this.messageHandlers.set('update_portal', this.handleUpdatePortal.bind(this));
+    this.messageHandlers.set('status_request', this.handleStatusRequest.bind(this));
+  }
+
+  async startDaemon(hostname: string): Promise<void> {
+    try {
+      // Check if daemon is already running
+      if (this.daemonProcesses.has(hostname)) {
+        console.log(`Daemon already running for ${hostname}`);
+        return;
+      }
+
+      const baseDir = `~/.socratic-shell/theoldswitcheroo`;
+      const socketPath = `${baseDir}/daemon.sock`;
+      const daemonPath = `${baseDir}/daemon-bundled.js`;
+
+      // Check if daemon files exist on remote host
+      const checkCommand = `test -f ${daemonPath} && echo "exists" || echo "missing"`;
+      const checkResult = await this.sshManager.executeCommand(hostname, checkCommand);
+      
+      if (checkResult.trim() !== 'exists') {
+        throw new Error(`Daemon files not found on ${hostname}. Run setup first.`);
+      }
+
+      // Check for existing daemon instance
+      const instanceCheck = await this.checkExistingInstance(hostname, socketPath);
+      if (instanceCheck.exists) {
+        const shouldTakeOver = await this.showHandoffDialog(hostname, instanceCheck.pid);
+        if (!shouldTakeOver) {
+          throw new Error('User declined to take over existing instance');
+        }
+        
+        // Kill existing daemon
+        await this.sshManager.executeCommand(hostname, `kill ${instanceCheck.pid} 2>/dev/null || true`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
+      // Start daemon via SSH
+      const daemonCommand = `cd ${baseDir} && ./nodejs/bin/node daemon-bundled.js --socket-path ${socketPath}`;
+      const daemonProcess = spawn('ssh', [
+        '-o', 'ControlMaster=no',
+        '-o', 'ControlPath=none',
+        hostname,
+        daemonCommand
+      ], {
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+
+      // Handle daemon output
+      daemonProcess.stdout?.on('data', (data) => {
+        const lines = data.toString().split('\n').filter(line => line.trim());
+        for (const line of lines) {
+          try {
+            const message = JSON.parse(line) as PortalMessage;
+            this.handleMessage(hostname, message);
+          } catch (error) {
+            // Not JSON, probably daemon log output
+            console.log(`[${hostname}] Daemon:`, line);
+          }
+        }
+      });
+
+      daemonProcess.stderr?.on('data', (data) => {
+        console.error(`[${hostname}] Daemon error:`, data.toString());
+      });
+
+      daemonProcess.on('exit', (code) => {
+        console.log(`[${hostname}] Daemon exited with code ${code}`);
+        this.daemonProcesses.delete(hostname);
+      });
+
+      this.daemonProcesses.set(hostname, daemonProcess);
+      console.log(`Started daemon for ${hostname}`);
+
+    } catch (error) {
+      console.error(`Failed to start daemon for ${hostname}:`, error);
+      throw error;
+    }
+  }
+
+  async stopDaemon(hostname: string): Promise<void> {
+    const daemonProcess = this.daemonProcesses.get(hostname);
+    if (daemonProcess) {
+      daemonProcess.kill('SIGTERM');
+      this.daemonProcesses.delete(hostname);
+      console.log(`Stopped daemon for ${hostname}`);
+    }
+  }
+
+  private async checkExistingInstance(hostname: string, socketPath: string): Promise<{
+    exists: boolean;
+    pid?: string;
+  }> {
+    try {
+      // Check if socket exists and get daemon PID
+      const checkCommand = `if [ -S "${socketPath}" ]; then lsof -t "${socketPath}" 2>/dev/null | head -1; else echo ""; fi`;
+      const result = await this.sshManager.executeCommand(hostname, checkCommand);
+      
+      const pid = result.trim();
+      return {
+        exists: pid !== '',
+        pid: pid || undefined
+      };
+    } catch (error) {
+      return { exists: false };
+    }
+  }
+
+  private async showHandoffDialog(hostname: string, pid?: string): Promise<boolean> {
+    // TODO: Implement actual dialog in Electron
+    // For now, return true to always take over
+    console.log(`Found existing daemon instance on ${hostname} (PID: ${pid}). Taking over...`);
+    return true;
+  }
+
+  private handleMessage(hostname: string, message: PortalMessage): void {
+    console.log(`[${hostname}] Received message:`, message);
+    
+    const handler = this.messageHandlers.get(message.type);
+    if (handler) {
+      handler(message);
+    } else {
+      console.warn(`No handler for message type: ${message.type}`);
+    }
+  }
+
+  private handleNewPortalRequest(message: PortalMessage): void {
+    const request = message as PortalRequest;
+    console.log(`Creating new portal: ${request.name}`);
+    
+    // TODO: Integrate with existing createPortal() method
+    // For now, just log the request
+    console.log('Portal request:', {
+      name: request.name,
+      description: request.description,
+      cwd: request.cwd
+    });
+  }
+
+  private handleUpdatePortal(message: PortalMessage): void {
+    console.log('Updating portal:', message);
+    // TODO: Implement portal update logic
+  }
+
+  private handleStatusRequest(message: PortalMessage): void {
+    console.log('Status request received');
+    // TODO: Send back current portal status
+  }
+
+  async sendMessage(hostname: string, message: PortalMessage): Promise<void> {
+    const daemonProcess = this.daemonProcesses.get(hostname);
+    if (!daemonProcess || !daemonProcess.stdin) {
+      throw new Error(`No active daemon for ${hostname}`);
+    }
+
+    const messageStr = JSON.stringify(message);
+    daemonProcess.stdin.write(messageStr + '\n');
+  }
+
+  async deployDaemonFiles(hostname: string): Promise<void> {
+    const baseDir = `~/.socratic-shell/theoldswitcheroo`;
+    const distDir = path.join(__dirname, '..', 'dist');
+    
+    // Ensure base directory exists
+    await this.sshManager.executeCommand(hostname, `mkdir -p ${baseDir}`);
+    
+    // Upload bundled daemon and CLI files
+    const daemonSource = path.join(distDir, 'daemon-bundled.js');
+    const cliSource = path.join(distDir, 'theoldswitcheroo-bundled.cjs');
+    
+    if (!fs.existsSync(daemonSource)) {
+      throw new Error('Daemon bundle not found. Run npm run build first.');
+    }
+    
+    if (!fs.existsSync(cliSource)) {
+      throw new Error('CLI bundle not found. Run npm run build first.');
+    }
+
+    // Upload files
+    await this.sshManager.uploadFile(hostname, daemonSource, `${baseDir}/daemon-bundled.js`);
+    await this.sshManager.uploadFile(hostname, cliSource, `${baseDir}/theoldswitcheroo`);
+    
+    // Make files executable
+    await this.sshManager.executeCommand(hostname, `chmod +x ${baseDir}/daemon-bundled.js ${baseDir}/theoldswitcheroo`);
+    
+    console.log(`Deployed daemon files to ${hostname}`);
+  }
+
+  isRunning(hostname: string): boolean {
+    return this.daemonProcesses.has(hostname);
+  }
+
+  getActiveHosts(): string[] {
+    return Array.from(this.daemonProcesses.keys());
+  }
+}
