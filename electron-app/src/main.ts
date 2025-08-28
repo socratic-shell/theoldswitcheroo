@@ -249,70 +249,70 @@ class SwitcherooApp {
   }
 
   async bootUp() {
-    // Show main window immediately with loading view
-    this.setMainView(this.loadingView.getView());
-    this.mainWindow.show();
-
-    // Add resize event listener to update view bounds
-    this.mainWindow.on('resize', () => {
-      this.updateViewBounds();
-    });
-
-    // Initialize the sidebar HTML and wait for it to load.
-    this.loadingView.updateMessage('Loading interface...');
-    this.sidebarView.webContents.loadFile(path.join(__dirname, '..', 'sidebar.html'));
-    await new Promise<void>(resolve => {
-      this.sidebarView.webContents.once('did-finish-load', () => resolve());
-    });
-
-    // Start daemon for this hostname
-    this.loadingView.updateMessage('Starting communication daemon...');
     try {
+      // Show main window immediately with loading view
+      this.setMainView(this.loadingView.getView());
+      this.mainWindow.show();
+
+      // Add resize event listener to update view bounds
+      this.mainWindow.on('resize', () => {
+        this.updateViewBounds();
+      });
+
+      // Initialize the sidebar HTML and wait for it to load.
+      this.loadingView.updateMessage('Loading interface...');
+      this.sidebarView.webContents.loadFile(path.join(__dirname, '..', 'sidebar.html'));
+      await new Promise<void>(resolve => {
+        this.sidebarView.webContents.once('did-finish-load', () => resolve());
+      });
+
+      // Start daemon for this hostname
+      this.loadingView.updateMessage('Starting communication daemon...');
       await this.portalManager.deployDaemonFiles(this.hostname);
       await this.portalManager.startDaemon(this.hostname);
       this.log('✓ Daemon started successfully');
       this.log('✓ CLI tool available in terminals as: theoldswitcheroo');
+
+      // Load existing portals
+      this.loadingView.updateMessage('Checking for existing portals...');
+      this.log('Checking for existing portals...');
+      const savedPortalData = this.loadPortalData();
+
+      // If there is savedData, restore it
+      if (savedPortalData.hostname === this.hostname && savedPortalData.portals.length > 0) {
+        this.loadingView.updateMessage('Restoring saved portals...');
+        await this.restoreSavedPortals(savedPortalData);
+        this.notifyPortalsChanged();
+      }
+
+      // Make sure there is at least one portal
+      if (this.portals.length == 0) {
+        this.loadingView.updateMessage('Creating initial portal...');
+        this.log(`Creating initial portal`);
+        const portal = await this.createNewPortal(this.loadingView);
+        this.log(`✓ Portal ${portal.name}: Started on port ${portal.port}`);
+      }
+
+      // Make sure *some* portal is selected
+      if (!this.activePortalUuid || !this.portalWithUuid(this.activePortalUuid)) {
+        this.activePortalUuid = this.portals[0].uuid;
+      }
+
+      // Select the active portal
+      this.loadingView.updateMessage('Loading VSCode...');
+      await this.switchPortal(this.portalWithUuid(this.activePortalUuid));
+
     } catch (error) {
-      this.log(`Error: Could not start daemon: ${error instanceof Error ? error.message : error}`);
+      this.log(`Error during startup: ${error instanceof Error ? error.message : error}`);
       
-      // Show error view instead of continuing
+      // Show error view for any startup failure
       this.errorView.showError(
-        'Daemon Setup Failed',
-        'Could not start the communication daemon. This may affect CLI tool functionality.',
-        error instanceof Error ? error.message : String(error)
+        'Startup Failed',
+        'Something went wrong while initializing the application. Please check your configuration and try again.',
+        error instanceof Error ? error.stack || error.message : String(error)
       );
       this.setMainView(this.errorView.getView());
-      return; // Stop here instead of continuing
     }
-
-    // Load existing portals
-    this.loadingView.updateMessage('Checking for existing portals...');
-    this.log('Checking for existing portals...');
-    const savedPortalData = this.loadPortalData();
-
-    // If there is savedData, restore it
-    if (savedPortalData.hostname === this.hostname && savedPortalData.portals.length > 0) {
-      this.loadingView.updateMessage('Restoring saved portals...');
-      await this.restoreSavedPortals(savedPortalData);
-      this.notifyPortalsChanged();
-    }
-
-    // Make sure there is at least one portal
-    if (this.portals.length == 0) {
-      this.loadingView.updateMessage('Creating initial portal...');
-      this.log(`Creating initial portal`);
-      const portal = await this.createNewPortal(this.loadingView);
-      this.log(`✓ Portal ${portal.name}: Started on port ${portal.port}`);
-    }
-
-    // Make sure *some* portal is selected
-    if (!this.activePortalUuid || !this.portalWithUuid(this.activePortalUuid)) {
-      this.activePortalUuid = this.portals[0].uuid;
-    }
-
-    // Select the active portal
-    this.loadingView.updateMessage('Loading VSCode...');
-    await this.switchPortal(this.portalWithUuid(this.activePortalUuid));
   }
 
   /// Replace the "main view" in our app with `view`
