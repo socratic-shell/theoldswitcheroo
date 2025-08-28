@@ -27,9 +27,21 @@ describe('Portal CLI Tool', () => {
     await new Promise(resolve => setTimeout(resolve, 100));
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     if (daemonProcess && !daemonProcess.killed) {
-      daemonProcess.kill();
+      daemonProcess.kill('SIGTERM');
+      
+      // Wait for process to actually exit
+      await new Promise<void>((resolve) => {
+        daemonProcess.on('exit', () => resolve());
+        // Force kill after 2 seconds if it doesn't exit gracefully
+        setTimeout(() => {
+          if (!daemonProcess.killed) {
+            daemonProcess.kill('SIGKILL');
+          }
+          resolve();
+        }, 2000);
+      });
     }
     
     if (fs.existsSync(testSocketPath)) {
@@ -73,9 +85,6 @@ describe('Portal CLI Tool', () => {
       });
 
       setTimeout(() => {
-        console.log('CLI stdout:', cliStdout);
-        console.log('CLI stderr:', cliStderr);
-        console.log('Daemon stdout:', stdoutData);
         reject(new Error('CLI timeout'));
       }, 10000);
     });
@@ -93,8 +102,8 @@ describe('Portal CLI Tool', () => {
   });
 
   test('CLI tool shows error when daemon not running', async () => {
-    // Kill daemon
-    daemonProcess.kill();
+    // Kill daemon first
+    daemonProcess.kill('SIGTERM');
     await new Promise(resolve => setTimeout(resolve, 200));
 
     // Run CLI tool

@@ -9,9 +9,9 @@ export default {
     '!jest.config.js'
   ],
   setupFilesAfterEnv: ['<rootDir>/test-setup.js'],
-  globals: {
-    'ts-jest': {
+  transform: {
+    '^.+\\.ts$': ['ts-jest', {
       useESM: true
-    }
+    }]
   }
 };

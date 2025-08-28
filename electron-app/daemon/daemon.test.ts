@@ -10,18 +10,37 @@ describe('Portal Daemon', () => {
 
   beforeEach(async () => {
     // Clean up any existing socket
-    if (fs.existsSync(testSocketPath)) {
-      fs.unlinkSync(testSocketPath);
+    try {
+      if (fs.existsSync(testSocketPath)) {
+        fs.unlinkSync(testSocketPath);
+      }
+    } catch (error) {
+      // Ignore cleanup errors
     }
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     if (daemonProcess && !daemonProcess.killed) {
-      daemonProcess.kill();
+      daemonProcess.kill('SIGTERM');
+      
+      // Wait for process to exit
+      await new Promise<void>((resolve) => {
+        daemonProcess.on('exit', () => resolve());
+        setTimeout(() => {
+          if (!daemonProcess.killed) {
+            daemonProcess.kill('SIGKILL');
+          }
+          resolve();
+        }, 2000);
+      });
     }
     
-    if (fs.existsSync(testSocketPath)) {
-      fs.unlinkSync(testSocketPath);
+    try {
+      if (fs.existsSync(testSocketPath)) {
+        fs.unlinkSync(testSocketPath);
+      }
+    } catch (error) {
+      // Ignore cleanup errors
     }
   });
 
