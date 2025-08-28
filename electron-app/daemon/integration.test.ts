@@ -97,6 +97,84 @@ describe('Integration Tests', () => {
     }
   }, 15000);
 
+  test('new message types: log-progress and signal-user flow', async () => {
+    let daemonProcess: ChildProcess | null = null;
+    
+    try {
+      // 1. Start daemon
+      daemonProcess = spawn('node', [bundledDaemonPath, '--socket-path', testSocketPath], {
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+
+      let daemonStdout = '';
+      let daemonStderr = '';
+
+      daemonProcess.stdout?.on('data', (data) => {
+        daemonStdout += data.toString();
+      });
+
+      daemonProcess.stderr?.on('data', (data) => {
+        daemonStderr += data.toString();
+      });
+
+      // 2. Wait for daemon to be ready
+      await waitForSocket(testSocketPath, 5000);
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // 3. Send log-progress command
+      const logProgressResult = await runCLICommand([
+        'log-progress',
+        '--message', 'Authentication system implemented',
+        '--category', 'milestone'
+      ]);
+
+      expect(logProgressResult.exitCode).toBe(0);
+      expect(logProgressResult.stdout).toContain('Progress logged: ✅ Authentication system implemented');
+
+      // 4. Send signal-user command
+      const signalUserResult = await runCLICommand([
+        'signal-user',
+        '--message', 'Need help with database schema design'
+      ]);
+
+      expect(signalUserResult.exitCode).toBe(0);
+      expect(signalUserResult.stdout).toContain('User signal sent: "Need help with database schema design"');
+
+      // 5. Verify daemon received and forwarded messages
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      // Check progress_log message
+      expect(daemonStdout).toContain('"type":"progress_log"');
+      expect(daemonStdout).toContain('"message":"Authentication system implemented"');
+      expect(daemonStdout).toContain('"category":"milestone"');
+
+      // Check user_signal message
+      expect(daemonStdout).toContain('"type":"user_signal"');
+      expect(daemonStdout).toContain('"message":"Need help with database schema design"');
+
+      // No errors should occur
+      expect(daemonStderr).not.toContain('Error');
+
+    } finally {
+      // Proper cleanup
+      if (daemonProcess && !daemonProcess.killed) {
+        daemonProcess.kill('SIGTERM');
+        
+        // Wait for process to exit
+        await new Promise<void>((resolve) => {
+          daemonProcess!.on('exit', () => resolve());
+          // Force kill after 2 seconds
+          setTimeout(() => {
+            if (!daemonProcess!.killed) {
+              daemonProcess!.kill('SIGKILL');
+            }
+            resolve();
+          }, 2000);
+        });
+      }
+    }
+  }, 15000);
+
   test('error handling: CLI with no daemon', async () => {
     // Ensure no daemon is running
     expect(fs.existsSync(testSocketPath)).toBe(false);

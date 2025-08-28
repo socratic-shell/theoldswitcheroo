@@ -188,6 +188,8 @@ class SwitcherooApp {
     // Set up taskspace request handlers
     this.taskspaceManager.setTaskSpaceRequestHandler(this.handleTaskSpaceRequest.bind(this));
     this.taskspaceManager.setStatusRequestHandler(this.handleStatusRequest.bind(this));
+    this.taskspaceManager.setProgressLogHandler(this.handleProgressLog.bind(this));
+    this.taskspaceManager.setUserSignalHandler(this.handleUserSignal.bind(this));
 
     // Create a persistent session for this hostname (shared across all sessions)
     // and initialize it for vscode compatibility.
@@ -541,6 +543,36 @@ class SwitcherooApp {
     } else {
       console.warn(`TaskSpace ${uuid} not found for update`);
     }
+  }
+
+  /// Handle progress log from CLI tools
+  private handleProgressLog(log: {
+    message: string;
+    category: 'info' | 'warn' | 'error' | 'milestone' | 'question';
+    timestamp: string;
+    hostname: string;
+  }): void {
+    console.log(`Progress log [${log.category}]: ${log.message}`);
+    
+    // For now, just log to console. In Phase 3, this will update the taskspace sidebar
+    const emoji = { info: 'ℹ️', warn: '⚠️', error: '❌', milestone: '✅', question: '❓' }[log.category];
+    this.log(`${emoji} ${log.message}`);
+    
+    // TODO: Add to taskspace progress timeline in sidebar
+  }
+
+  /// Handle user signal from CLI tools
+  private handleUserSignal(signal: {
+    message: string;
+    timestamp: string;
+    hostname: string;
+  }): void {
+    console.log(`User signal: ${signal.message}`);
+    
+    // For now, just log to console. In Phase 3, this will show GUI notification
+    this.log(`🔔 Agent needs help: ${signal.message}`);
+    
+    // TODO: Show notification dialog or status bar alert
   }
 
   /// Show error view with custom message
